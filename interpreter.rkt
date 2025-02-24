@@ -14,8 +14,9 @@
 
 ; The state of the interpreter. Starts empty
 ; Format (var_list val_list)
-(define state '(() ())) 
+(define init_state '(() ()))
 
+; Calls append_var and append_val to map val to var within state
 (define append_state 
   (lambda (var val old_state)
     (cons (append_var var (car old_state))
@@ -31,4 +32,3 @@
   (lambda (val val_list)
     (cons val val_list)))
 
- 
