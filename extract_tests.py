@@ -11,7 +11,8 @@ def extract_tests(html_file, output_dir):
 
     pre_blocks = soup.find_all('pre')
     for i, pre in enumerate(pre_blocks, start=1):
-        test_code = pre.get_text().strip()  # Strip leading and trailing whitespace
+        # Strip leading and trailing whitespace
+        test_code = pre.get_text().strip()  
         test_file = os.path.join(output_dir, f'test_{i}.txt')
         with open(test_file, 'w') as file:
             file.write(test_code)
