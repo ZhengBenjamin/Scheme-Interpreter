@@ -14,7 +14,6 @@
 
 ; Declares a new variable with no value 
 ; Returns state with var added to it
-; TODO: Check if var already exists
 (define var_dec
   (lambda (var state)
     (if var_exists? var state)
@@ -28,6 +27,10 @@
       (error "Variable already exists")
       (append_state var val state)))
 
+; (define var_assn
+;   (lambda (var val state)
+;     (if var_exists? var state)
+;       ()))
 
 ;=======================================
 ;; State Logic 
@@ -71,6 +74,17 @@
       ((null? (cdr state)) #f)
       ((equal? var (car (car state))) (not (null? (car (cdr state)))))
       (else (var_init? var (cons (cdr (car state)) (cdr (cdr state))))))))
+
+(define remove_binding
+  (lambda (var state)
+    (list (car state) (find_replace_val var (car state) (car (cdr state))))))
+
+
+;=======================================
+;; Helper Functions
+;=======================================
+
+
 
 (define add
   (lambda (x y)
