@@ -27,10 +27,11 @@
       (error "Variable already exists")
       (append_state var val state)))
 
-; (define var_assn
-;   (lambda (var val state)
-;     (if var_exists? var state)
-;       ()))
+(define var_assn
+  (lambda (var val state)
+    (if (var_exists? var state)
+      (add_binding var val (remove_binding var state))
+      (error "Variable does not exist"))))
 
 ;=======================================
 ;; State Logic 
@@ -75,9 +76,31 @@
       ((equal? var (car (car state))) (not (null? (car (cdr state)))))
       (else (var_init? var (cons (cdr (car state)) (cdr (cdr state))))))))
 
+; Sets binding of var to val in the state
 (define remove_binding
   (lambda (var state)
     (list (car state) (find_replace_val var (car state) (car (cdr state))))))
+
+; Helper for remove_binding, finds var and replace its val with null
+(define find_replace_val
+  (lambda (var var_list val_list)
+    (cond
+      ((null? var_list) val_list)
+      ((equal? var (car var_list)) (cons null (cdr val_list))) ; Set binding to null
+      (else (cons (car val_list) (find_replace_val var (cdr var_list) (cdr val_list)))))))
+
+; Sets binding of var to val in the state
+(define add_binding
+  (lambda (var val state)
+    (list (car state) (find_set_val var val (car state) (car (cdr state))))))
+
+; Helper for add_binding, finds var and replace its val with new val
+(define find_set_val
+  (lambda (var val var_list val_list)
+    (cond
+      ((null? var_list) val_list) ;
+      ((equal? var (car var_list)) (cons val (cdr val_list))) ; Update binding
+      (else (cons (car val_list) (find_set_val var val (cdr var_list) (cdr val_list)))))))
 
 
 ;=======================================
