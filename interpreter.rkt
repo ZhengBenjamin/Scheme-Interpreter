@@ -20,7 +20,7 @@
 (define append_state 
   (lambda (var val old_state)
     (cons (append_var var (car old_state))
-          (append_val val (cdr old_state)))))
+      (append_val val (cdr old_state)))))
 
 ; Appends a value to the value list within state
 (define append_var
