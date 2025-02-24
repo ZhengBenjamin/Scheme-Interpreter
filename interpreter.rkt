@@ -12,6 +12,27 @@
 ; Input: input file with code
 (define interpret (lambda (input) (parser input)))
 
+; Input string -> int val
+; TODO: idk if this is supposed to be implemented the way Connie did it in class 
+(define int
+  (lambda (x)
+    (if (number? x)
+      x
+      (error "Not a number"))))
+
+; Input string or expression -> bool val if true or false
+(define bool
+  (lambda (x)
+    (cond 
+      ((equal? x "true") #t)
+      ((equal? x "false") #f)
+      ((or (equal? (expression x) #t) (equal? (expression x) #f)) (expression x))
+      (else (error "Not a boolean")))))
+
+; Input: math expression -> calls declaration, assign, eval etc
+(define expression '())
+
+
 ; Declares a new variable with no value 
 ; Returns state with var added to it
 (define var_dec
