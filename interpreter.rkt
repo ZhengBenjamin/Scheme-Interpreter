@@ -30,7 +30,3 @@
 (define append_val
   (lambda (val val_list)
     (cons val val_list)))
-
-(define add
-  (lambda (x y)
-    (+ x y)))
