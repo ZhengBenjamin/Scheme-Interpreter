@@ -3,7 +3,7 @@
 
 ;===============================================================
 ;; Interpreter 
-;; Tyler Powers, Henry Ozda, and Benjamin Zheng 
+;; Tyler Powers, Henry Odza, and Benjamin Zheng 
 ;;
 ;; CSDS 345
 ;=======================================
@@ -17,21 +17,23 @@
 (define state '(() ())) 
 
 (define append_state 
-  (lambda (var, val)
+  (lambda (var val)
     (append_var var (car state))
     (append_val val (cdr state))))
 
 ; Appends a value to the value list within state
 (define append_val
-  (lambda (val, val_list)
-      (if pair? val_list) 
+  (lambda (val val_list)
+      (if (pair? val_list) 
         (cons (car val_list) (append_val val (cdr val_list)))
-        (cons val val_list)))
+        (cons val val_list))))
 
 ; Appends a variable to the variable list within state
 (define append_var
-  (lambda (var, var_list)
-    (if pair? var_list) 
+  (lambda (var var_list)
+    (if (pair? var_list)
       (cons (car var_list) (append_var var (cdr var_list)))
-      (cons var var_list)))
+      (cons var var_list))))
+
+; test
 
