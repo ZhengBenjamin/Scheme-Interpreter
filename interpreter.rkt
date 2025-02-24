@@ -24,12 +24,11 @@
 ; Appends a value to the value list within state
 (define append_val
   (lambda (val val_list)
-    (cons var var_list)))
+    (cons val var_list)))
 
 ; Appends a variable to the variable list within state
 (define append_var
   (lambda (var var_list)
-    (cons val val_list)))
+    (cons var val_list)))
 
-; 
  
