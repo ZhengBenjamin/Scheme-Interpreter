@@ -1,6 +1,6 @@
 #lang racket
 (require "simpleParser.rkt")
-
+(provide (all-defined-out))
 ;===============================================================
 ;; Interpreter 
 ;; Tyler Powers, Henry Odza, and Benjamin Zheng 
@@ -31,4 +31,6 @@
   (lambda (val val_list)
     (cons val val_list)))
 
- 
+(define add
+  (lambda (x y)
+    (+ x y)))
