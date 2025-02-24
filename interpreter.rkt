@@ -17,12 +17,16 @@
 ; TODO: Check if var already exists
 (define var_dec
   (lambda (var state)
-    (append_state var null state)))
+    (if var_exists? var state)
+      (error "Variable already exists")
+      (append_state var null state)))
 
 ; Declares a new variable with a value 
 (define var_dec_assn
   (lambda (var val state) 
-    (append_state var val state)))
+    (if var_exists? var state)
+      (error "Variable already exists")
+      (append_state var val state)))
 
 
 ;=======================================
