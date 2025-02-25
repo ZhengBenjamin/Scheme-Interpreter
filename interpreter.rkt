@@ -12,7 +12,9 @@
 ; Input: input file with code
 (define interpret (lambda (input) (parser input)))
 
-; 
+;=======================================
+;; M_ functions
+;; These functions are the main stateful functions that are called by the parser
 (define M_state
   (lambda (statement state return break)
     (cond
@@ -24,7 +26,7 @@
       ((eq? (car statement) 'return) (M_return (cadr statement) state return break))
       ((eq? (car statement) 'break) (M_break state return break))
       (else (error "Invalid statement")))))
-
+;=======================================
 ; ((var x) 
 ;  (= x 10) 
 ;  (var y (+ (* 3 x) 5)) 
