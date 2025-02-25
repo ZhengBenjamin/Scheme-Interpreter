@@ -24,7 +24,7 @@
       ((eq? (function statement) '=) (var_assn (varname statement) (varvalue statement) state))
       ((eq? (function statement) 'while) (M_while (condition statement) (body1 statement) state))
       ((eq? (function statement) 'if) (M_if (condition statement) (body1 statement) (body2 statement) state))
-      ((eq? (function statement) 'return) (M_return (cadr statement) state))
+     ; ((eq? (function statement) 'return) (M_return (cadr statement) state))
       (else (error "Invalid statement")))))
 
 ; abstraction
@@ -53,35 +53,47 @@
         (M_state (while_statement state)))))
 
 
+; evaluates a mathematical expression
+(define M_value
+  (lambda (expression state)
+    (cond
+      ; mathematical evaluation
+      ((number? expression) expression)
+      ((eq? '+ (op expression)) (+ (M_value (x expression) (M_value (y expression)))))
+      ((eq? '- (op expression)) (- (M_value (x expression) (M_value (y expression)))))
+      ((eq? '* (op expression)) (* (M_value (x expression) (M_value (y expression)))))
+      ((eq? '/ (op expression)) (quotient (M_value (x expression) (M_value (y expression)))))
+      ((eq? '% (op expression)) (remainder (M_value (x expression) (M_value (y expression)))))
+
+      ; logical evaluation
+      ((eq? 'true expression) #t)
+      ((eq? 'false expression) #f)
+      ((eq? '== (op expression)) (M_boolean expression state))
+
+      (else 'error "Invalid expression")
+
+      )))
 
 
-
-
-; ((var x) 
-;  (= x 10) 
-;  (var y (+ (* 3 x) 5)) 
-;  (while (!= (% y x) 3) (= y (+ y 1))) 
-;  (if (> x y) (return x) (if (> (* x x) y) (return (* x x)) (if (> (* x (+ x x)) y) (return (* x (+ x x))) (return (- y 1))))))
-; Input string -> int val
-; TODO: idk if this is supposed to be implemented the way Connie did it in class 
-(define int
-  (lambda (x)
-    (if (number? x)
-      x
-      (error "Not a number"))))
-
-; Input string or expression -> bool val if true or false
+; evaluates a boolean expression  ==, !=, <, >, <=. >=
 (define M_boolean
-  (lambda (x)
-    (cond 
-      ((equal? x "true") #t)
-      ((equal? x "false") #f)
-      ((or (equal? (expression x) #t) (equal? (expression x) #f)) (expression x))
-      (else (error "Not a boolean")))))
+  (lambda (expression state)
+    (cond
+      ((boolean? expression) expression)
+      ((eq? '== (op expression)) (eq? (M_value (x expression) state) (M_value (y expression) state)))
+      ((eq? '!= (op expression)) (not (eq? (M_value (x expression) state) (M_value (y expression) state))))
+      ((eq? '> (op expression)) (> (M_value (x expression) state) (M_value (y expression) state)))
+      ((eq? '< (op expression)) (< (M_value (x expression) state) (M_value (y expression) state)))
+      ((eq? '>= (op expression)) (>= (M_value (x expression) state) (M_value (y expression) state)))
+      ((eq? '<= (op expression)) (<= (M_value (x expression) state) (M_value (y expression) state)))
+      (else 'error "invalid boolean expression")
+      )))
 
-; Input: math expression -> calls declaration, assign, eval etc
-(define expression '())
 
+
+(define op car)
+(define x cadr)
+(define y caddr)
 
 ; Declares a new variable with no value 
 ; Returns state with var added to it
