@@ -15,18 +15,47 @@
 ;=======================================
 ;; M_ functions
 ;; These functions are the main stateful functions that are called by the parser
+;=======================================
 (define M_state
   (lambda (statement state return break)
     (cond
-      ((list? (car statement)) (M_state (car statement) state return break))
-      ((eq? (car statement) 'var) (M_declare (cadr statement) state return break))
-      ((eq? (car statement) '=) (M_assn (cadr statement) (caddr statement) state return break))
-      ((eq? (car statement) 'while) (M_while (cadr statement) (caddr statement) state return break))
-      ((eq? (car statement) 'if) (M_if (cadr statement) (caddr statement) state return break))
-      ((eq? (car statement) 'return) (M_return (cadr statement) state return break))
-      ((eq? (car statement) 'break) (M_break state return break))
+      ((list? (car statement)) (M_state (car statement) state))
+      ((eq? (function statement) 'var) (M_declare (cadr statement) state))
+      ((eq? (function statement) '=) (M_assn (cadr statement) (caddr statement) state))
+      ((eq? (function statement) 'while) (M_while (condition statement) (body1 statement) state))
+      ((eq? (function statement) 'if) (M_if (condition statement) (body1 statement) (body2 statement) state))
+      ((eq? (function statement) 'return) (M_return (cadr statement) state))
+      ((eq? (function statement) 'break) (M_break state))
       (else (error "Invalid statement")))))
-;=======================================
+
+; abstraction
+(define function car)
+
+; abstraction for if
+(define condition cadr)
+(define body1 caddr)
+(define body2 cadddr)
+
+
+
+
+(define M_if
+  (lambda (if_statement if_then if_else state)
+    (if (M_boolean if_statement)
+        (M_state (if_then (M_state if_statement state)))
+        (M_state (if_else (M_state if_statement state))))))
+
+(define M_while
+  (lambda (while_statement while_body state)
+    (if (M_boolean while_statement)
+        (M_while while_statement while_body (M_state (while_body (M_state while_statement state))))
+        (M_state (while_statement state)))))
+
+
+
+
+
+
 ; ((var x) 
 ;  (= x 10) 
 ;  (var y (+ (* 3 x) 5)) 
@@ -41,7 +70,7 @@
       (error "Not a number"))))
 
 ; Input string or expression -> bool val if true or false
-(define bool
+(define M_boolean
   (lambda (x)
     (cond 
       ((equal? x "true") #t)
