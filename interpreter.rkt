@@ -12,6 +12,24 @@
 ; Input: input file with code
 (define interpret (lambda (input) (parser input)))
 
+; 
+(define M_state
+  (lambda (statement state return break)
+    (cond
+      ((list? (car statement)) (M_state (car statement) state return break))
+      ((eq? (car statement) 'var) (M_declare (cadr statement) state return break))
+      ((eq? (car statement) '=) (M_assn (cadr statement) (caddr statement) state return break))
+      ((eq? (car statement) 'while) (M_while (cadr statement) (caddr statement) state return break))
+      ((eq? (car statement) 'if) (M_if (cadr statement) (caddr statement) state return break))
+      ((eq? (car statement) 'return) (M_return (cadr statement) state return break))
+      ((eq? (car statement) 'break) (M_break state return break))
+      (else (error "Invalid statement")))))
+
+; ((var x) 
+;  (= x 10) 
+;  (var y (+ (* 3 x) 5)) 
+;  (while (!= (% y x) 3) (= y (+ y 1))) 
+;  (if (> x y) (return x) (if (> (* x x) y) (return (* x x)) (if (> (* x (+ x x)) y) (return (* x (+ x x))) (return (- y 1))))))
 ; Input string -> int val
 ; TODO: idk if this is supposed to be implemented the way Connie did it in class 
 (define int
@@ -38,21 +56,25 @@
 (define var_dec
   (lambda (var state)
     (if var_exists? var state)
-      (error "Variable already exists")
-      (append_state var null state)))
+    (error "Variable already exists")
+    (append_state var null state)))
 
 ; Declares a new variable with a value 
+; TODO: This does not work, must combine with var_dec, to see if it is a var_dec or var_dec_assn
 (define var_dec_assn
   (lambda (var val state) 
     (if var_exists? var state)
-      (error "Variable already exists")
-      (append_state var val state)))
+    (error "Variable already exists")
+    (append_state var val state)))
 
 (define var_assn
   (lambda (var val state)
     (if (var_exists? var state)
       (add_binding var val (remove_binding var state))
       (error "Variable does not exist"))))
+
+; TODO: Implement while loop
+
 
 ;=======================================
 ;; State Logic 
