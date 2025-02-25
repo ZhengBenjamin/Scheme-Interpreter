@@ -10,7 +10,7 @@
 
 ; Calls the parser on the input file 
 ; Input: input file with code
-(define interpret (lambda (input) (parser input)))
+(define interpret (lambda (input) ((M_state (parser input) init_state))))
 
 ;=======================================
 ;; M_ functions
