@@ -1,7 +1,6 @@
 #lang racket/base
 
-(require rackunit
-         "interpreter.rkt")
+(require rackunit "interpreter.rkt")
 
 (check-equal? (interpret "tests/test1.txt") 150 "test1")
 (check-equal? (interpret "tests/test2.txt") -4 "test2")
