@@ -24,7 +24,7 @@
       ((eq? (function statement) '=) (var_assn (varname statement) (varvalue statement) state))
       ((eq? (function statement) 'while) (M_while (condition statement) (body1 statement) state))
       ((eq? (function statement) 'if) (M_if (condition statement) (body1 statement) (body2 statement) state))
-     ; ((eq? (function statement) 'return) (M_return (cadr statement) state))
+      ; ((eq? (function statement) 'return) (M_return (cadr statement) state))
       (else (error "Invalid statement")))))
 
 ; abstraction
@@ -68,7 +68,6 @@
       ; logical evaluation
       ((eq? 'true expression) #t)
       ((eq? 'false expression) #f)
-      ((eq? '== (op expression)) (M_boolean expression state))
 
       (else 'error "Invalid expression")
 
