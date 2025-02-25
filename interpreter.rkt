@@ -17,7 +17,7 @@
 ;; These functions are the main stateful functions that are called by the parser
 ;=======================================
 (define M_state
-  (lambda (statement state return break)
+  (lambda (statement state)
     (cond
       ((list? (car statement)) (M_state (car statement) state))
       ((eq? (function statement) 'var) (var_dec (varname statement) state))
