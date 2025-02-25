@@ -20,23 +20,24 @@
   (lambda (statement state return break)
     (cond
       ((list? (car statement)) (M_state (car statement) state))
-      ((eq? (function statement) 'var) (M_declare (cadr statement) state))
-      ((eq? (function statement) '=) (M_assn (cadr statement) (caddr statement) state))
+      ((eq? (function statement) 'var) (var_dec (varname statement) state))
+      ((eq? (function statement) '=) (var_assn (varname statement) (varvalue statement) state))
       ((eq? (function statement) 'while) (M_while (condition statement) (body1 statement) state))
       ((eq? (function statement) 'if) (M_if (condition statement) (body1 statement) (body2 statement) state))
       ((eq? (function statement) 'return) (M_return (cadr statement) state))
-      ((eq? (function statement) 'break) (M_break state))
       (else (error "Invalid statement")))))
 
 ; abstraction
 (define function car)
 
-; abstraction for if
+; abstraction for declare/assign
+(define varname cadr)
+(define varvalue caddr)
+
+; abstraction for if/while
 (define condition cadr)
 (define body1 caddr)
 (define body2 cadddr)
-
-
 
 
 (define M_if
