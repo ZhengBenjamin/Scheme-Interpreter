@@ -1,1 +1,3 @@
-var z = 4;
+var z;
+z = 4;
+return z;
