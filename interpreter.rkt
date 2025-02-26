@@ -12,22 +12,39 @@
 ; Input: input file with code
 (define interpret 
   (lambda (input) 
-    (M_state (parser input) init_state)))
+    (M_state (parser input) (init_state) (lambda (x) x) (lambda (x) x))))
 
 ;=======================================
 ;; M_ functions
 ;; These functions are the main stateful functions that are called by the parser
 ;=======================================
 (define M_state
-  (lambda (statement state)
+  (lambda (statement state return break)
     (cond
       ((null? statement) state)
-      ((list? (car statement)) (M_state (cdr statement) (M_state (car statement) state)))
-      ((eq? (function statement) 'var) (var_dec (varname statement) state))
-      ((eq? (function statement) '=) (var_assn (varname statement) (varvalue statement) state))
-      ((eq? (function statement) 'while) (M_while (condition statement) (body1 statement) state))
-      ((eq? (function statement) 'if) (M_if (condition statement) (body1 statement) (body2 statement) state))
-      ((eq? (function statement) 'return) (M_return (cadr statement) state))
+      ((list? (car statement)) (M_state 
+                                (cdr statement) 
+                                (M_state (car statement) state return break) 
+                                return break))
+      ((eq? (function statement) 'var) (var_dec 
+                                        (varname statement) 
+                                        state return break))
+      ((eq? (function statement) '=) (var_assn 
+                                      (varname statement) 
+                                      (varvalue statement) 
+                                      state return break))
+      ((eq? (function statement) 'while) (M_while 
+                                          (condition statement) 
+                                          (body1 statement) 
+                                          state return break))
+      ((eq? (function statement) 'if) (M_if 
+                                        (condition statement) 
+                                        (body1 statement) 
+                                        (body2 statement) 
+                                        state return break))
+      ((eq? (function statement) 'return) (M_return 
+                                            (cadr statement) 
+                                            state return break))
       (else (error "Invalid statement")))))
 
 ; abstraction
@@ -105,6 +122,10 @@
 (define M_return
   (lambda (statement state)
     (M_value statement state)))
+
+;=======================================
+;; Variable Logic
+;=======================================
 
 ; Declares a new variable with no value 
 ; Returns state with var added to it
@@ -218,9 +239,3 @@
 ;=======================================
 ;; Helper Functions
 ;=======================================
-
-
-
-(define add
-  (lambda (x y)
-    (+ x y)))
