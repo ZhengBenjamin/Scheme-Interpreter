@@ -109,6 +109,9 @@
   (lambda (expression state)
     (printf "M_value called with expression: ~a and state: ~a\n" expression state)
     (cond
+      ; logical evaluation
+      ((eq? 'true expression) #t)
+      ((eq? 'false expression) #f)
       ; var
       ((number? expression) expression)
       ((var? expression) (get_var expression state))
@@ -128,10 +131,6 @@
       ((eq? '/ (op expression)) (quotient (M_value (x expression) state) (M_value (y expression) state)))
       ((eq? '% (op expression)) (remainder (M_value (x expression) state) (M_value (y expression) state)))
 
-      ; logical evaluation
-      ((eq? 'true expression) #t)
-      ((eq? 'false expression) #f)
-
       (else (error "Invalid expression")))))
 
 
@@ -150,12 +149,13 @@
 (define bool_op?
   (lambda (x)
     (printf "bool_op? called with x: ~a\n" x)
-    (or (eq? '|| x) (or (eq? '&& x) (or (eq? '! x) (or (eq? '== x) (or (eq? '!= x) (or (eq? '> x) (or (eq? '< x) (or (eq? '>= x) (eq? '<= x)))))))))))
+    (or (eq? 'false x) (or (eq? 'true x) (or (eq? '|| x) (or (eq? '&& x) (or (eq? '! x) (or (eq? '== x) (or (eq? '!= x) (or (eq? '> x) (or (eq? '< x) (or (eq? '>= x) (eq? '<= x)))))))))))))
 ; evaluates a boolean expression  ==, !=, <, >, <=. >=
 (define M_boolean
   (lambda (expression state)
     (printf "M_boolean called with expression: ~a and state: ~a\n" expression state)
     (cond
+      ((var? expression) (get_var expression state))
       ((boolean? expression) expression)
       ((eq? 'true expression) expression)
       ((eq? 'false expression) expression)
@@ -304,7 +304,11 @@
     (printf "find_var called with var: ~a and state: ~a\n" var state)
     (cond
       ((or (null? (car state)) (null? (cadr state))) (error (format "Variable not in state: ~a" var)))
-      ((eq? var (car (car state))) (find_var_helper (car (car (cdr state)))))
+      ((eq? var (car (car state))) 
+        (cond
+          ((eq? #t (find_var_helper (car (car (cdr state))))) 'true)
+          ((eq? #f (find_var_helper (car (car (cdr state))))) 'false)
+          (else (find_var_helper (car (car (cdr state)))))))
       (else (get_var var (cons (cdar state) (list (cdadr state))))))))
 
 ; Helper for find_var, checks if var has been intialized

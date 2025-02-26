@@ -1,2 +1,3 @@
-var y = 12 + 23;
-return y;
+var x = true;
+var y = false;
+var z = x || y;
