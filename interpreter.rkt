@@ -39,12 +39,11 @@
       ((list? (car statement)) (M_state 
                                 (cdr statement) 
                                 (M_state (car statement) state)))
-      ((eq? (function statement) 'var) (var_dec 
-                                        (varexp statement) 
+      ((eq? (function statement) 'var) (M_declare
+                                        statement
                                         state))
-      ((eq? (function statement) '=) (var_assn 
-                                      (varname statement) 
-                                      (varvalue statement) 
+      ((eq? (function statement) '=) (M_assign
+                                      statement 
                                       state))
       ((eq? (function statement) 'while) (M_while 
                                           (condition statement) 
@@ -66,9 +65,6 @@
 (define varname cadr)
 (define varvalue caddr)
 
-
-
-
 (define M_if
   (lambda (statement state)
     (printf "M_if called with statement: ~a, state: ~a\n" statement state)
@@ -89,6 +85,24 @@
 (define condition cadr)
 (define body1 caddr)
 (define body2 cadddr)
+
+(define M_declare
+  (lambda (statement state)
+    (printf "M_declare called with statement: ~a and state: ~a\n" statement state)
+    (cond
+      ((var_exists? (varname statement) state) (error ("Variable already exists")))
+      ((has_value? statement) (var_dec_assn (varname statement) (M_value (varvalue statement) state) state))
+      (else (var_dec (varname statement) state)))))
+
+; abstraction for declare. checks if define has a value
+(define has_value? (lambda (statement) (if (null? (cddr statement)) #f #t)))
+
+(define M_assign
+  (lambda (statement state)
+    (printf "M_assign called with statement: ~a and state: ~a\n" statement state)
+    (if (var_exists? (varname statement) state)
+      (var_assn (varname statement) (M_value (varvalue statement) state) state)
+      (error (format "Variable not declared: ~a" (varname statement))))))
 
 ; evaluates a mathematical expression
 (define M_value
@@ -173,29 +187,17 @@
 ;; Variable Logic
 ;=======================================
 
-; Declares a new variable with no value 
-; Returns state with var added to it
+; Variable declaration, assigns var to null 
 (define var_dec
   (lambda (var state)
     (printf "var_dec called with var: ~a and state: ~a\n" var state)
-    (cond
-      ((var_exists? (vname var) state) (error (format "Variable already exists: ~a" (vname var))))
-      ((var_dec_assn? var) (var_dec_assn (vname var) (M_value (cadr var) state) state))
-      (else (append_state (vname var) 'null state)))))
+    (append_state var 'null state)))
 
-(define vname car)
-(define var_dec_assn?
-  (lambda (var)
-    (printf "var_dec_assn? called with var: ~a\n" var)
-    (pair? (cdr var))))
-; Declares a new variable with a value 
-; TODO: This does not work, must combine with var_dec, to see if it is a var_dec or var_dec_assn
+; Variable declaration with assignment, assigns var to val
 (define var_dec_assn
   (lambda (var val state)
     (printf "var_dec_assn called with var: ~a, val: ~a and state: ~a\n" var val state)
-    (if (var_exists? var state)
-        (error (format "Redfine error, variable already exists: ~a" var))
-        (append_state var val state))))
+    (append_state var val state)))
 
 (define var_assn
   (lambda (var val state)
