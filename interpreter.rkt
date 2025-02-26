@@ -101,6 +101,12 @@
       ((eq? '|| (op expression)) (or (M_boolean (x expression) state) (M_boolean (y expression) state)))
       ((eq? '&& (op expression)) (and (M_boolean (x expression) state) (M_boolean (y expression) state)))
       ((eq? '! (op expression)) (not (M_boolean (x expression) state)))
+      ((eq? '== (op expression)) (eq? (M_value (x expression) state) (M_value (y expression) state)))
+      ((eq? '!= (op expression)) (not (eq? (M_value (x expression) state) (M_value (y expression) state))))
+      ((eq? '> (op expression)) (> (M_value (x expression) state) (M_value (y expression) state)))
+      ((eq? '< (op expression)) (< (M_value (x expression) state) (M_value (y expression) state)))
+      ((eq? '>= (op expression)) (>= (M_value (x expression) state) (M_value (y expression) state)))
+      ((eq? '<= (op expression)) (<= (M_value (x expression) state) (M_value (y expression) state)))
       ; mathematical evaluation
       ((eq? '+ (op expression)) (+ (M_value (x expression) state) (M_value (y expression) state)))
       ((eq? '- (op expression)) (subtract expression state))
@@ -130,7 +136,7 @@
 (define bool_op?
   (lambda (x)
     (printf "bool_op? called with x: ~a\n" x)
-    (or (eq? '|| x) (or (eq? '&& x) (eq? '! x)))))
+    (or (eq? '|| x) (or (eq? '&& x) (or (eq? '! x) (or (eq? '== x) (or (eq? '!= x) (or (eq? '> x) (or (eq? '< x) (or (eq? '>= x) (eq? '<= x)))))))))))
 ; evaluates a boolean expression  ==, !=, <, >, <=. >=
 (define M_boolean
   (lambda (expression state)
