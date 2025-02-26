@@ -61,9 +61,9 @@
     (printf "M_if called with statement: ~a, state: ~a\n" statement state)
     (if (M_boolean (condition statement) state)
         (M_state (body1 statement) state)
-        (if (eq? #f (null? (body2 statement)))
-            (M_state (body2 statement) state)
-            state))))
+        (if (> 4 (length statement))
+            state
+            (M_state (body2 statement) state)))))
 
 (define M_while
   (lambda (while_statement while_body state)
