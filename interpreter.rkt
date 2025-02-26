@@ -149,7 +149,7 @@
 (define bool_op?
   (lambda (x)
     (printf "bool_op? called with x: ~a\n" x)
-    (or (eq? '|| x) (or (eq? '&& x) (or (eq? '! x) (or (eq? '== x) (or (eq? '!= x) (or (eq? '> x) (or (eq? '< x) (or (eq? '>= x) (eq? '<= x)))))))))))
+    (or (eq? 'false x) (or (eq? 'true x) (or (eq? '|| x) (or (eq? '&& x) (or (eq? '! x) (or (eq? '== x) (or (eq? '!= x) (or (eq? '> x) (or (eq? '< x) (or (eq? '>= x) (eq? '<= x)))))))))))))
 ; evaluates a boolean expression  ==, !=, <, >, <=. >=
 (define M_boolean
   (lambda (expression state)
