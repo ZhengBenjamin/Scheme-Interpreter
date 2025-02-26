@@ -97,10 +97,10 @@
     (cond
       ; var
       ((number? expression) expression)
+      ((var? expression) (get_var expression state))
       ((eq? '|| (op expression)) (or (M_boolean (x expression) state) (M_boolean (y expression) state)))
       ((eq? '&& (op expression)) (and (M_boolean (x expression) state) (M_boolean (y expression) state)))
       ((eq? '! (op expression)) (not (M_boolean (x expression) state)))
-      ((var? expression) (get_var expression state))
       ; mathematical evaluation
       ((eq? '+ (op expression)) (+ (M_value (x expression) state) (M_value (y expression) state)))
       ((eq? '- (op expression)) (subtract expression state))
@@ -125,9 +125,12 @@
 (define var?
   (lambda (x)
     (printf "var? called with x: ~a\n" x)
-    (and (and (not (number? x)) (not (list? x))) (not (pair? x)))))
+    (and (and (not (number? x)) (not (list? x))) (and (not (pair? x)) (not (bool_op? x))))))
 
-
+(define bool_op?
+  (lambda (x)
+    (printf "bool_op? called with x: ~a\n" x)
+    (or (eq? '|| x) (or (eq? '&& x) (eq? '! x)))))
 ; evaluates a boolean expression  ==, !=, <, >, <=. >=
 (define M_boolean
   (lambda (expression state)
