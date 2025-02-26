@@ -65,16 +65,14 @@
   (lambda (if_statement if_then if_else state)
   (printf "M_if called with if_statement: ~a, if_then: ~a, if_else: ~a, state: ~a\n" if_statement if_then if_else state)
     (if (M_boolean if_statement state) 
-        (M_state (if_then (M_state if_statement state)))
-        (M_state (if_else (M_state if_statement state))))))
+        (M_state if_then state)
+        (M_state if_else state))))
 
 (define M_while
   (lambda (while_statement while_body state)
   (printf "M_while called with while_statement: ~a, while_body: ~a, state: ~a\n" while_statement while_body state)
     (if (M_boolean while_statement state)
-        (M_while while_statement while_body 
-                  (M_state while_statement state) 
-                 )
+        (M_while while_statement while_body state)
         state)))
 
 
@@ -163,7 +161,7 @@
   (lambda (var val state)
     (printf "var_assn called with var: ~a, val: ~a and state: ~a\n" var val state)
     (if (var_exists? var state)
-      (add_binding var val (remove_binding var state))
+        (add_binding var (M_value val state) (remove_binding var state))
       (error "Variable does not exist"))))
 
 ; TODO: Implement while loop
