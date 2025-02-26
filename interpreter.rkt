@@ -63,12 +63,14 @@
 
 (define M_if
   (lambda (if_statement if_then if_else state)
+  (printf "M_if called with if_statement: ~a, if_then: ~a, if_else: ~a, state: ~a\n" if_statement if_then if_else state)
     (if (M_boolean if_statement state) 
         (M_state (if_then (M_state if_statement state)))
         (M_state (if_else (M_state if_statement state))))))
 
 (define M_while
   (lambda (while_statement while_body state)
+  (printf "M_while called with while_statement: ~a, while_body: ~a, state: ~a\n" while_statement while_body state)
     (if (M_boolean while_statement state)
         (M_while while_statement while_body 
                   (M_state while_statement state) 
@@ -79,6 +81,7 @@
 ; evaluates a mathematical expression
 (define M_value
   (lambda (expression state)
+    (printf "M_value called with expression: ~a and state: ~a\n" expression state)
     (cond
       ; var
       ((var? expression) (get_var expression state))
@@ -98,12 +101,14 @@
 
 (define var?
   (lambda (x)
+    (printf "var? called with x: ~a\n" x)
     (and (and (not (number? x)) (not (list? x))) (not (pair? x)))))
 
 
 ; evaluates a boolean expression  ==, !=, <, >, <=. >=
 (define M_boolean
   (lambda (expression state)
+    (printf "M_boolean called with expression: ~a and state: ~a\n" expression state)
     (cond
       ((boolean? expression) expression)
       ((eq? '== (op expression)) (eq? (M_value (x expression) state) (M_value (y expression) state)))
@@ -112,7 +117,7 @@
       ((eq? '< (op expression)) (< (M_value (x expression) state) (M_value (y expression) state)))
       ((eq? '>= (op expression)) (>= (M_value (x expression) state) (M_value (y expression) state)))
       ((eq? '<= (op expression)) (<= (M_value (x expression) state) (M_value (y expression) state)))
-      (else 'error "invalid boolean expression")
+      (else (error "invalid boolean expression"))
       )))
 
 
@@ -123,6 +128,7 @@
 
 (define M_return
   (lambda (statement state)
+    (printf "M_return called with statement: ~a and state: ~a\n" statement state)
     (M_value statement state)))
 
 ;=======================================
@@ -133,6 +139,7 @@
 ; Returns state with var added to it
 (define var_dec
   (lambda (var state)
+    (printf "var_dec called with var: ~a and state: ~a\n" var state)
     (cond
       ((var_exists? (vname var) state) (error "Variable already exists"))
       ((var_dec_assn? var) (var_dec_assn (vname var) (M_value (cadr var) state) state))
@@ -190,6 +197,7 @@
 ; Returns true if it exists, false otherwise
 (define var_exists? 
   (lambda (var state)
+    (printf "var_exists? called with var: ~a and state: ~a\n" var state)
     (cond 
       ((null? (car state)) #f)
       ((equal? var (car (car state))) #t)
@@ -199,20 +207,23 @@
 ; Returns true if it has been initialized, false otherwise
 (define var_init?
   (lambda (var state)
+    (printf "var_init? called with var: ~a and state: ~a\n" var state)
     (cond
       ((eq? #f (var_exists? var state)) #f)
       ((null? (cdr state)) #f)
       ((equal? var (car (car state))) (not (null? (car (cdr state)))))
-      (else (var_init? var (cons (cdr (car state)) (cdr (cdr state))))))))
+      (else (var_init? var (cons (cdr (car state)) (cdr (car state))))))))
 
 ; Sets binding of var to val in the state
 (define remove_binding
   (lambda (var state)
+    (printf "remove_binding called with var: ~a and state: ~a\n" var state)
     (list (car state) (find_replace_val var (car state) (car (cdr state))))))
 
 ; Helper for remove_binding, finds var and replace its val with null
 (define find_replace_val
   (lambda (var var_list val_list)
+    (printf "find_replace_val called with var: ~a, var_list: ~a, val_list: ~a\n" var var_list val_list)
     (cond
       ((null? var_list) val_list)
       ((equal? var (car var_list)) (cons null (cdr val_list))) ; Set binding to null
@@ -221,11 +232,13 @@
 ; Sets binding of var to val in the state
 (define add_binding
   (lambda (var val state)
+    (printf "add_binding called with var: ~a, val: ~a, state: ~a\n" var val state)
     (list (car state) (find_set_val var val (car state) (car (cdr state))))))
 
 ; Helper for add_binding, finds var and replace its val with new val
 (define find_set_val
   (lambda (var val var_list val_list)
+    (printf "find_set_val called with var: ~a, val: ~a, var_list: ~a, val_list: ~a\n" var val var_list val_list)
     (cond
       ((null? var_list) val_list) ;
       ((equal? var (car var_list)) (cons val (cdr val_list))) ; Update binding
@@ -234,14 +247,16 @@
 ; find var in state
 (define get_var
   (lambda (var state)
+    (printf "get_var called with var: ~a and state: ~a\n" var state)
     (if (var_init? var state)
         (find_var var state)
-        ('error "var not initialized"))))
+        (error "var not initialized"))))
 
 (define find_var
   (lambda (var state)
+    (printf "find_var called with var: ~a and state: ~a\n" var state)
     (cond
-      ((or (null? (car state)) (null? (cadr state))) ('error "var not in state"))
+      ((or (null? (car state)) (null? (cadr state))) (error "var not in state"))
       ((eq? var (car (car state))) (car (car (cdr state))))
       (else (get_var var (cons (cdar state) (cadr state)))))))
 ;=======================================
