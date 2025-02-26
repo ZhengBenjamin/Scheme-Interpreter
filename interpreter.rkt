@@ -11,8 +11,21 @@
 ; Calls the parser on the input file 
 ; Input: input file with code
 (define interpret 
-  (lambda (input) 
+  (lambda (input)
     (M_state (parser input) init_state)))
+; (define interpret
+;   (lambda (input)
+;     (printf "Interpret called with input: ~a\n" input)
+;     (printf "Calling parser\n")
+;     (displayln (list (parser input)))))
+; (define interpret
+;   (lambda (input)
+;     (printf "Interpret called with input: ~s\n" input)  ; ~s for precise printing
+;     (printf "Calling parser\n")
+;     (let ((parsed (parser input)))
+;       (printf "Raw parsed output: ~s\n" parsed)  ; Preserve structure
+;       (displayln parsed))))
+
 
 ;=======================================
 ;; M_ functions
@@ -83,9 +96,12 @@
     (printf "M_value called with expression: ~a and state: ~a\n" expression state)
     (cond
       ; var
+      ((number? expression) expression)
+      ((eq? '|| (op expression)) (or (M_boolean (x expression) state) (M_boolean (y expression) state)))
+      ((eq? '&& (op expression)) (and (M_boolean (x expression) state) (M_boolean (y expression) state)))
+      ((eq? '! (op expression)) (not (M_boolean (x expression) state)))
       ((var? expression) (get_var expression state))
       ; mathematical evaluation
-      ((number? expression) expression)
       ((eq? '+ (op expression)) (+ (M_value (x expression) state) (M_value (y expression) state)))
       ((eq? '- (op expression)) (subtract expression state))
       ((eq? '* (op expression)) (* (M_value (x expression) state) (M_value (y expression) state)))
@@ -118,12 +134,17 @@
     (printf "M_boolean called with expression: ~a and state: ~a\n" expression state)
     (cond
       ((boolean? expression) expression)
+      ((eq? 'true expression) expression)
+      ((eq? 'false expression) expression)
       ((eq? '== (op expression)) (eq? (M_value (x expression) state) (M_value (y expression) state)))
       ((eq? '!= (op expression)) (not (eq? (M_value (x expression) state) (M_value (y expression) state))))
       ((eq? '> (op expression)) (> (M_value (x expression) state) (M_value (y expression) state)))
       ((eq? '< (op expression)) (< (M_value (x expression) state) (M_value (y expression) state)))
       ((eq? '>= (op expression)) (>= (M_value (x expression) state) (M_value (y expression) state)))
       ((eq? '<= (op expression)) (<= (M_value (x expression) state) (M_value (y expression) state)))
+      ((eq? '&& (op expression)) (and (M_boolean (x expression) state) (M_boolean (y expression) state)))
+      ((eq? '|| (op expression)) (or (M_boolean (x expression) state) (M_boolean (y expression) state)))
+      ((eq? '! (op expression)) (not (M_boolean (x expression) state)))
       (else (error "invalid boolean expression"))
       )))
 
