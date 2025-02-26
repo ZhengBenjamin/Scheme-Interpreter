@@ -61,10 +61,10 @@
 
 
 (define M_if
-  (lambda (if_statement if_then if_else state)
+  (lambda (if_statement if_then if_else state return break)
     (if (M_boolean if_statement)
-        (M_state (if_then (M_state if_statement state)))
-        (M_state (if_else (M_state if_statement state))))))
+        (M_state (if_then (M_state if_statement state return break)) return break)
+        (M_state (if_else (M_state if_statement state return break)) return break))))
 
 (define M_while
   (lambda (while_statement while_body state)
