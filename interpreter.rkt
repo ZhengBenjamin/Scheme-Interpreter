@@ -38,9 +38,7 @@
                                           (body1 statement) 
                                           state))
       ((eq? (function statement) 'if) (M_if 
-                                        (condition statement) 
-                                        (body1 statement) 
-                                        (body2 statement) 
+                                        statement
                                         state))
       ((eq? (function statement) 'return) (M_return 
                                             (cadr statement) 
@@ -55,18 +53,17 @@
 (define varname cadr)
 (define varvalue caddr)
 
-; abstraction for if/while
-(define condition cadr)
-(define body1 caddr)
-(define body2 cadddr)
+
 
 
 (define M_if
-  (lambda (if_statement if_then if_else state)
-  (printf "M_if called with if_statement: ~a, if_then: ~a, if_else: ~a, state: ~a\n" if_statement if_then if_else state)
-    (if (M_boolean if_statement state) 
-        (M_state if_then state)
-        (M_state if_else state))))
+  (lambda (statement state)
+    (printf "M_if called with statement: ~a, state: ~a\n" statement state)
+    (if (M_boolean (condition statement) state)
+        (M_state (body1 statement) state)
+        (if (eq? #f (null? (body2 statement)))
+            (M_state (body2 statement) state)
+            state))))
 
 (define M_while
   (lambda (while_statement while_body state)
@@ -75,6 +72,10 @@
         (M_while while_statement while_body state)
         state)))
 
+; abstraction for if/while
+(define condition cadr)
+(define body1 caddr)
+(define body2 cadddr)
 
 ; evaluates a mathematical expression
 (define M_value
