@@ -148,18 +148,20 @@
 (define vname car)
 (define var_dec_assn?
   (lambda (var)
-    (printf "(cdr var): ~a\n" (cdr var))
+    (printf "var_dec_assn? called with var: ~a\n" var)
     (pair? (cdr var))))
 ; Declares a new variable with a value 
 ; TODO: This does not work, must combine with var_dec, to see if it is a var_dec or var_dec_assn
 (define var_dec_assn
   (lambda (var val state)
+    (printf "var_dec_assn called with var: ~a, val: ~a and state: ~a\n" var val state)
     (if (var_exists? var state)
         (error "Variable already exists")
         (append_state var val state))))
 
 (define var_assn
   (lambda (var val state)
+    (printf "var_assn called with var: ~a, val: ~a and state: ~a\n" var val state)
     (if (var_exists? var state)
       (add_binding var val (remove_binding var state))
       (error "Variable does not exist"))))
@@ -180,17 +182,20 @@
 ; Calls append_var and append_val to map val to var within state
 (define append_state 
   (lambda (var val old_state)
+    (printf "append_state called with var: ~a, val: ~a and old_state: ~a\n" var val old_state)
     (cons (append_var var (car old_state))
           (list (append_val val (car (cdr old_state)))))))
 
 ; Appends a value to the value list within state
 (define append_var
   (lambda (var var_list)
+    (printf "append_var called with var: ~a and var_list: ~a\n" var var_list)
     (cons var var_list)))
 
 ; Appends a variable to the variable list within state
 (define append_val
   (lambda (val val_list)
+    (printf "append_val called with val: ~a and val_list: ~a\n" val val_list)
     (cons val val_list)))
 
 ; Checks if a variable exists in the state
