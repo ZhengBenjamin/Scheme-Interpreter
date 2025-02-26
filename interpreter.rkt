@@ -43,7 +43,7 @@
       ((eq? (function statement) 'return) (M_return 
                                             (cadr statement) 
                                             state))
-      (else (error "Invalid statement")))))
+      (else (error (format "Invalid statement: ~a" statement))))))
 
 ; abstraction
 (define function car)
@@ -149,7 +149,7 @@
   (lambda (var state)
     (printf "var_dec called with var: ~a and state: ~a\n" var state)
     (cond
-      ((var_exists? (vname var) state) (error "Variable already exists"))
+      ((var_exists? (vname var) state) (error (format "Variable already exists: ~a" (vname var))))
       ((var_dec_assn? var) (var_dec_assn (vname var) (M_value (cadr var) state) state))
       (else (append_state (vname var) 'null state)))))
 
@@ -164,7 +164,7 @@
   (lambda (var val state)
     (printf "var_dec_assn called with var: ~a, val: ~a and state: ~a\n" var val state)
     (if (var_exists? var state)
-        (error "Variable already exists")
+        (error (format "Redfine error, variable already exists: ~a" var))
         (append_state var val state))))
 
 (define var_assn
@@ -172,7 +172,7 @@
     (printf "var_assn called with var: ~a, val: ~a and state: ~a\n" var val state)
     (if (var_exists? var state)
         (add_binding var (M_value val state) (remove_binding var state))
-      (error "Variable does not exist"))))
+      (error (format "Variable not declared: ~a" var)))))
 
 ; TODO: Implement while loop
 
@@ -257,21 +257,31 @@
       ((equal? var (car var_list)) (cons val (cdr val_list))) ; Update binding
       (else (cons (car val_list) (find_set_val var val (cdr var_list) (cdr val_list)))))))
 
-; find var in state
+; Gets the value of a variable in the state
 (define get_var
   (lambda (var state)
     (printf "get_var called with var: ~a and state: ~a\n" var state)
-    (if (var_init? var state)
-        (find_var var state)
-        (error "var not initialized"))))
+    (cond
+      ((not (var_exists? var state)) (error (format "Variable not declared: ~a" var)))
+      ((var_init? var state) (find_var var state))
+      (else (error (format "Variable not initialized: ~a" var))))))
 
+; Helper for get_var, finds var and returns its value
 (define find_var
   (lambda (var state)
     (printf "find_var called with var: ~a and state: ~a\n" var state)
     (cond
-      ((or (null? (car state)) (null? (cadr state))) (error "var not in state"))
-      ((eq? var (car (car state))) (car (car (cdr state))))
+      ((or (null? (car state)) (null? (cadr state))) (error (format "Variable not in state: ~a" var)))
+      ((eq? var (car (car state))) (find_var_helper (car (car (cdr state)))))
       (else (get_var var (cons (cdar state) (list (cdadr state))))))))
+
+; Helper for find_var, checks if var has been intialized
+(define find_var_helper
+  (lambda (value)
+    (printf "find_var_helper called with value: ~a\n" value)
+    (cond
+      ((eq? value 'null) (error "Variable not initialized"))
+      (else value))))
 ;=======================================
 ;; Helper Functions
 ;=======================================
