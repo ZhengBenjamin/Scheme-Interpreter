@@ -62,15 +62,17 @@
 
 (define M_if
   (lambda (if_statement if_then if_else state return break)
-    (if (M_boolean if_statement)
+    (if (M_boolean if_statement state return break) 
         (M_state (if_then (M_state if_statement state return break)) return break)
         (M_state (if_else (M_state if_statement state return break)) return break))))
 
 (define M_while
-  (lambda (while_statement while_body state)
-    (if (M_boolean while_statement)
-        (M_while while_statement while_body (M_state (while_body (M_state while_statement state))))
-        (M_state (while_statement state)))))
+  (lambda (while_statement while_body state return break)
+    (if (M_boolean while_statement state return break)
+        (M_while while_statement while_body 
+                  (M_state while_statement state return break) 
+                  return break)
+        state)))
 
 
 ; evaluates a mathematical expression
