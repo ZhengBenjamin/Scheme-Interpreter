@@ -217,7 +217,7 @@
       ((eq? #f (var_exists? var state)) #f)
       ((null? (cdr state)) #f)
       ((equal? var (car (car state))) (not (null? (car (cdr state)))))
-      (else (var_init? var (cons (cdr (car state)) (cdr (car state))))))))
+      (else (var_init? var (cons (cdr (car state)) (list (cdr (car (cdr state))))))))))
 
 ; Sets binding of var to val in the state
 (define remove_binding
@@ -263,7 +263,7 @@
     (cond
       ((or (null? (car state)) (null? (cadr state))) (error "var not in state"))
       ((eq? var (car (car state))) (car (car (cdr state))))
-      (else (get_var var (cons (cdar state) (cadr state)))))))
+      (else (get_var var (cons (cdar state) (list (cdadr state))))))))
 ;=======================================
 ;; Helper Functions
 ;=======================================
