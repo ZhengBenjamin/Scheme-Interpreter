@@ -20,20 +20,38 @@
 ;=======================================
 (define M_state
   (lambda (statement state)
+    (printf "M_state called with statement: ~a and state: ~a\n" statement state)
     (cond
       ((null? statement) state)
-      ((list? (car statement)) (M_state (cdr statement) (M_state (car statement) state)))
-      ((eq? (function statement) 'var) (var_dec (varname statement) state))
-      ((eq? (function statement) '=) (var_assn (varname statement) (varvalue statement) state))
-      ((eq? (function statement) 'while) (M_while (condition statement) (body1 statement) state))
-      ((eq? (function statement) 'if) (M_if (condition statement) (body1 statement) (body2 statement) state))
-      ((eq? (function statement) 'return) (M_return (cadr statement) state))
+      ((list? (car statement)) (M_state 
+                                (cdr statement) 
+                                (M_state (car statement) state)))
+      ((eq? (function statement) 'var) (var_dec 
+                                        (varexp statement) 
+                                        state))
+      ((eq? (function statement) '=) (var_assn 
+                                      (varname statement) 
+                                      (varvalue statement) 
+                                      state))
+      ((eq? (function statement) 'while) (M_while 
+                                          (condition statement) 
+                                          (body1 statement) 
+                                          state))
+      ((eq? (function statement) 'if) (M_if 
+                                        (condition statement) 
+                                        (body1 statement) 
+                                        (body2 statement) 
+                                        state))
+      ((eq? (function statement) 'return) (M_return 
+                                            (cadr statement) 
+                                            state))
       (else (error "Invalid statement")))))
 
 ; abstraction
 (define function car)
 
 ; abstraction for declare/assign
+(define varexp cdr)
 (define varname cadr)
 (define varvalue caddr)
 
@@ -45,15 +63,17 @@
 
 (define M_if
   (lambda (if_statement if_then if_else state)
-    (if (M_boolean if_statement)
+    (if (M_boolean if_statement state) 
         (M_state (if_then (M_state if_statement state)))
         (M_state (if_else (M_state if_statement state))))))
 
 (define M_while
   (lambda (while_statement while_body state)
-    (if (M_boolean while_statement)
-        (M_while while_statement while_body (M_state (while_body (M_state while_statement state))))
-        (M_state (while_statement state)))))
+    (if (M_boolean while_statement state)
+        (M_while while_statement while_body 
+                  (M_state while_statement state) 
+                 )
+        state)))
 
 
 ; evaluates a mathematical expression
@@ -64,23 +84,22 @@
       ((var? expression) (get_var expression state))
       ; mathematical evaluation
       ((number? expression) expression)
-      ((eq? '+ (op expression)) (+ (M_value (x expression) (M_value (y expression)))))
-      ((eq? '- (op expression)) (- (M_value (x expression) (M_value (y expression)))))
-      ((eq? '* (op expression)) (* (M_value (x expression) (M_value (y expression)))))
-      ((eq? '/ (op expression)) (quotient (M_value (x expression) (M_value (y expression)))))
-      ((eq? '% (op expression)) (remainder (M_value (x expression) (M_value (y expression)))))
+      ((eq? '+ (op expression)) (+ (M_value (x expression) state) (M_value (y expression) state)))
+      ((eq? '- (op expression)) (- (M_value (x expression) state) (M_value (y expression) state)))
+      ((eq? '* (op expression)) (* (M_value (x expression) state) (M_value (y expression) state)))
+      ((eq? '/ (op expression)) (quotient (M_value (x expression) state) (M_value (y expression) state)))
+      ((eq? '% (op expression)) (remainder (M_value (x expression) state) (M_value (y expression) state)))
 
       ; logical evaluation
       ((eq? 'true expression) #t)
       ((eq? 'false expression) #f)
 
-      (else 'error "Invalid expression")
-
-      )))
+      (else (error "Invalid expression")))))
 
 (define var?
   (lambda (x)
     (and (and (not (number? x)) (not (list? x))) (not (pair? x)))))
+
 
 ; evaluates a boolean expression  ==, !=, <, >, <=. >=
 (define M_boolean
@@ -106,14 +125,24 @@
   (lambda (statement state)
     (M_value statement state)))
 
+;=======================================
+;; Variable Logic
+;=======================================
+
 ; Declares a new variable with no value 
 ; Returns state with var added to it
 (define var_dec
   (lambda (var state)
-    (if (var_exists? var state)
-        (error "Variable already exists")
-        (append_state var 'null state))))
+    (cond
+      ((var_exists? (vname var) state) (error "Variable already exists"))
+      ((var_dec_assn? var) (var_dec_assn (vname var) (M_value (cadr var) state) state))
+      (else (append_state (vname var) 'null state)))))
 
+(define vname car)
+(define var_dec_assn?
+  (lambda (var)
+    (printf "(cdr var): ~a\n" (cdr var))
+    (pair? (cdr var))))
 ; Declares a new variable with a value 
 ; TODO: This does not work, must combine with var_dec, to see if it is a var_dec or var_dec_assn
 (define var_dec_assn
@@ -132,7 +161,7 @@
 
 
 ;=======================================
-;; State Logic 
+;; State Logic
 ;=======================================
 
 ; TODO abstraction for all state logic
@@ -218,9 +247,3 @@
 ;=======================================
 ;; Helper Functions
 ;=======================================
-
-
-
-(define add
-  (lambda (x y)
-    (+ x y)))
