@@ -87,7 +87,7 @@
       ; mathematical evaluation
       ((number? expression) expression)
       ((eq? '+ (op expression)) (+ (M_value (x expression) state) (M_value (y expression) state)))
-      ((eq? '- (op expression)) (- (M_value (x expression) state) (M_value (y expression) state)))
+      ((eq? '- (op expression)) (subtract expression state))
       ((eq? '* (op expression)) (* (M_value (x expression) state) (M_value (y expression) state)))
       ((eq? '/ (op expression)) (quotient (M_value (x expression) state) (M_value (y expression) state)))
       ((eq? '% (op expression)) (remainder (M_value (x expression) state) (M_value (y expression) state)))
@@ -97,6 +97,14 @@
       ((eq? 'false expression) #f)
 
       (else (error "Invalid expression")))))
+
+
+(define subtract
+  (lambda (expression state)
+    (printf "subtract called with expression: ~a and state: ~a\n" expression state)
+    (cond 
+      ((null? (unary expression)) (- (M_value (x expression) state)))
+      (else (- (M_value (x expression) state) (M_value (y expression) state))))))
 
 (define var?
   (lambda (x)
@@ -124,6 +132,7 @@
 (define op car)
 (define x cadr)
 (define y caddr)
+(define unary cddr)
 
 (define M_return
   (lambda (statement state)
