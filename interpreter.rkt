@@ -39,9 +39,9 @@
     (vprintf "M_state called with statement: ~s and state: ~s\n" statement state)
     (cond
       ((null? statement) state)
-      ((list? (car statement)) (M_state 
-                                (cdr statement) 
-                                (M_state (car statement) state)))
+      ((list? (function statement)) (M_state 
+                                (stmt_list statement) 
+                                (M_state (function statement) state)))
       ((eq? (function statement) 'var) (M_declare
                                         statement
                                         state))
@@ -50,24 +50,25 @@
                                       state))
       ((eq? (function statement) 'while) (M_while 
                                           (condition statement) 
-                                          (body1 statement) 
+                                          (body statement) 
                                           state))
       ((eq? (function statement) 'if) (M_if 
                                         statement
                                         state))
       ((eq? (function statement) 'return) (M_return 
-                                            (cadr statement) 
+                                            (return_val statement) 
                                             state))
       (else (error (format "Invalid statement: ~s" statement))))))
 
-; abstraction
+; abstraction for M_state
 (define function car)
+(define inner_statement car)
+(define stmt_list cdr)
+(define return_val cadr)
+(define body caddr)
+(define condition cadr)
 
-; abstraction for declare/assign
-(define varexp cdr)
-(define varname cadr)
-(define varvalue caddr)
-
+; if statement. If condition is true,
 (define M_if
   (lambda (statement state)
     (vprintf "M_if called with statement: ~s, state: ~s\n" statement state)
@@ -77,7 +78,7 @@
             state
             (M_state (body2 statement) state)))))
 
-
+; while statement. While condition is true
 (define M_while
   (lambda (while_statement while_body state)
     (vprintf "M_while called with while_statement: ~s, while_body: ~s, state: ~s\n" while_statement while_body state)
@@ -86,10 +87,10 @@
         state)))
 
 ; abstraction for if/while
-(define condition cadr)
 (define body1 caddr)
 (define body2 cadddr)
 
+; declare a variable
 (define M_declare
   (lambda (statement state)
     (vprintf "M_declare called with statement: ~s and state: ~s\n" statement state)
@@ -99,9 +100,10 @@
       (else (var_dec (varname statement) state)))))
 
 
-; abstraction for declare. checks if define has a value
+; checks to see if a var declaration has a value to assign
 (define has_value? (lambda (statement) (if (null? (cddr statement)) #f #t)))
 
+; assigns a value to a variable
 (define M_assign
   (lambda (statement state)
     (vprintf "M_assign called with statement: ~s and state: ~s\n" statement state)
@@ -109,16 +111,18 @@
       (var_assn (varname statement) (M_value (varvalue statement) state) state)
       (error (format "Variable not declared: ~s" (varname statement))))))
 
+; abstraction for declare and assign
+(define varname cadr)
+(define varvalue caddr)
+
 ; evaluates a mathematical expression
 (define M_value
   (lambda (expression state)
     (vprintf "M_value called with expression: ~s and state: ~s\n" expression state)
     (cond
-      ; logical evaluation
       ((eq? 'true expression) #t)
       ((eq? 'false expression) #f)
       ((boolean? expression) expression)
-      ; var
       ((number? expression) expression)
       ((var? expression) (get_var expression state))
       ((eq? '|| (op expression)) (or (M_boolean (x expression) state) (M_boolean (y expression) state)))
@@ -130,7 +134,6 @@
       ((eq? '< (op expression)) (< (M_value (x expression) state) (M_value (y expression) state)))
       ((eq? '>= (op expression)) (>= (M_value (x expression) state) (M_value (y expression) state)))
       ((eq? '<= (op expression)) (<= (M_value (x expression) state) (M_value (y expression) state)))
-      ; mathematical evaluation
       ((eq? '+ (op expression)) (+ (M_value (x expression) state) (M_value (y expression) state)))
       ((eq? '- (op expression)) (subtract expression state))
       ((eq? '* (op expression)) (* (M_value (x expression) state) (M_value (y expression) state)))
@@ -139,7 +142,7 @@
 
       (else (error "Invalid expression")))))
 
-
+; Checks to see if subtraction is a unary or binary operation
 (define subtract
   (lambda (expression state)
     (vprintf "subtract called with expression: ~s and state: ~s\n" expression state)
@@ -147,11 +150,13 @@
       ((null? (unary expression)) (- (M_value (x expression) state)))
       (else (- (M_value (x expression) state) (M_value (y expression) state))))))
 
+; Checks to see if a atom could be variable
 (define var?
   (lambda (x)
     (vprintf "var? called with x: ~s\n" x)
     (and (and (not (number? x)) (not (list? x))) (and (not (pair? x)) (not (bool_op? x))))))
 
+; Checks to see if a atom is a boolean operator
 (define bool_op?
   (lambda (x)
     (vprintf "bool_op? called with x: ~s\n" x)
@@ -178,13 +183,13 @@
       (else (error "invalid boolean expression"))
       )))
 
-
-
+; abstraction for M_value and M_boolean
 (define op car)
 (define x cadr)
 (define y caddr)
 (define unary cddr)
 
+; return statement
 (define M_return
   (lambda (statement state)
     (vprintf "M_return called with statement: ~s and state: ~s\n" statement state)
