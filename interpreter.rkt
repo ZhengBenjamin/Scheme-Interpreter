@@ -310,14 +310,15 @@
   (lambda (var state)
     (vprintf "find_var called with var: ~s and state: ~s\n" var state)
     (cond
-      ((or (null? (car state)) (null? (cadr state))) (error (format "Variable not in state: ~s" var)))
-      ((eq? var (car (car state))) 
-        (cond
-          ((eq? #t (find_var_helper (car (car (cdr state))))) #t)
-          ((eq? #f (find_var_helper (car (car (cdr state))))) #f)
-          (else (find_var_helper (car (car (cdr state)))))))
-      (else (get_var var (cons (cdar state) (list (cdadr state))))))))
-
+      ((or (null? (vars state)) (null? (values state))) (error (format "Variable not in state: ~s" var)))
+      ((eq? var (first_var_name state)) (find_var_helper (first_value state)))
+      (else (get_var var (cons (other_vars state) (list (other_values state))))))))
+(define vars car)
+(define values cadr)
+(define first_var_name caar)
+(define first_value caadr)
+(define other_vars cdar)
+(define other_values cdadr)
 ; Helper for find_var, checks if var has been intialized
 (define find_var_helper
   (lambda (value)
