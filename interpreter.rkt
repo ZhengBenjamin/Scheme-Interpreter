@@ -10,22 +10,16 @@
 
 ; Calls the parser on the input file 
 ; Input: input file with code
-(define interpret 
+(define interpret
   (lambda (input)
-    (M_state (parser input) init_state)))
-; (define interpret
-;   (lambda (input)
-;     (printf "Interpret called with input: ~s\n" input)
-;     (printf "Calling parser\n")
-;     (displayln (list (parser input)))))
-; (define interpret
-;   (lambda (input)
-;     (printf "Interpret called with input: ~s\n" input)  ; ~s for precise printing
-;     (printf "Calling parser\n")
-;     (let ((parsed (parser input)))
-;       (printf "Raw parsed output: ~s\n" parsed)  ; Preserve structure
-;       (displayln parsed))))
+    (formater (M_state (parser input) init_state))))
 
+(define formater
+  (lambda (input)
+    (printf "Formater called with input: ~s\n" input)
+    (cond
+      ((boolean? input) (if input 'true 'false))
+      (else input))))
 
 ;=======================================
 ;; M_ functions
@@ -78,7 +72,7 @@
   (lambda (while_statement while_body state)
   (printf "M_while called with while_statement: ~s, while_body: ~s, state: ~s\n" while_statement while_body state)
     (if (M_boolean while_statement state)
-        (M_while while_statement while_body state)
+        (M_while while_statement while_body (M_state while_body state))
         state)))
 
 ; abstraction for if/while
@@ -151,6 +145,7 @@
   (lambda (x)
     (printf "bool_op? called with x: ~s\n" x)
     (or (eq? 'false x) (or (eq? 'true x) (or (eq? '|| x) (or (eq? '&& x) (or (eq? '! x) (or (eq? '== x) (or (eq? '!= x) (or (eq? '> x) (or (eq? '< x) (or (eq? '>= x) (or (eq? '<= x) (boolean? x))))))))))))))
+
 ; evaluates a boolean expression  ==, !=, <, >, <=. >=
 (define M_boolean
   (lambda (expression state)
@@ -158,8 +153,8 @@
     (cond
       ((boolean? expression) expression)
       ((var? expression) (get_var expression state))
-      ((eq? 'true expression) expression)
-      ((eq? 'false expression) expression)
+      ((eq? 'true expression) #t)
+      ((eq? 'false expression) #f)
       ((eq? '== (op expression)) (eq? (M_value (x expression) state) (M_value (y expression) state)))
       ((eq? '!= (op expression)) (not (eq? (M_value (x expression) state) (M_value (y expression) state))))
       ((eq? '> (op expression)) (> (M_value (x expression) state) (M_value (y expression) state)))
@@ -168,7 +163,7 @@
       ((eq? '<= (op expression)) (<= (M_value (x expression) state) (M_value (y expression) state)))
       ((eq? '&& (op expression)) (and (M_boolean (x expression) state) (M_boolean (y expression) state)))
       ((eq? '|| (op expression)) (or (M_boolean (x expression) state) (M_boolean (y expression) state)))
-      ((eq? '! (op expression)) (printf "Here: ~s\n" (not (M_boolean (x expression) state)))(not (M_boolean (x expression) state)))
+      ((eq? '! (op expression)) (not (M_boolean (x expression) state)))
       (else (error "invalid boolean expression"))
       )))
 
@@ -307,8 +302,8 @@
       ((or (null? (car state)) (null? (cadr state))) (error (format "Variable not in state: ~s" var)))
       ((eq? var (car (car state))) 
         (cond
-          ((eq? #t (find_var_helper (car (car (cdr state))))) 'true)
-          ((eq? #f (find_var_helper (car (car (cdr state))))) 'false)
+          ((eq? #t (find_var_helper (car (car (cdr state))))) #t)
+          ((eq? #f (find_var_helper (car (car (cdr state))))) #f)
           (else (find_var_helper (car (car (cdr state)))))))
       (else (get_var var (cons (cdar state) (list (cdadr state))))))))
 
