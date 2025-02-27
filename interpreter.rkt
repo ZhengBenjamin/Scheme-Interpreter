@@ -2,6 +2,19 @@
 (require "simpleParser.rkt")
 (provide (all-defined-out))
 
+
+;=======================================
+;; Interpreter 
+;; Henry Odza, Tyler Powers, and Benjamin Zheng 
+;;
+;; CSDS 345
+;=======================================
+
+
+;=======================================
+;; Verbose Flag and print helper function
+;; Used for debugging, set verbose to #t to see print statements
+;=======================================
 ; Verbose flag to control print statements
 (define verbose #f)
 
@@ -10,13 +23,11 @@
   (when verbose
     (apply printf fmt args)))
 
-;=======================================
-;; Interpreter 
-;; Tyler Powers, Henry Odza, and Benjamin Zheng 
-;;
-;; CSDS 345
-;=======================================
 
+;=======================================
+;; Interpreter
+;; The main interpreter function that calls the parser and M_state, formater will take the output of M_state and format it for the user
+;=======================================
 ; Calls the parser on the input file 
 ; Input: input file with code
 (define interpret
@@ -30,6 +41,7 @@
       ((boolean? input) (if input 'true 'false))
       (else input))))
 
+
 ;=======================================
 ;; M_ functions
 ;; These functions are the main stateful functions that are called by the parser
@@ -40,14 +52,14 @@
     (cond
       ((null? statement) state)
       ((list? (function statement)) (M_state 
-                                (stmt_list statement) 
-                                (M_state (function statement) state)))
+                                      (stmt_list statement) 
+                                      (M_state (function statement) state)))
       ((eq? (function statement) 'var) (M_declare
-                                        statement
-                                        state))
+                                          statement
+                                          state))
       ((eq? (function statement) '=) (M_assign
-                                      statement 
-                                      state))
+                                        statement 
+                                        state))
       ((eq? (function statement) 'while) (M_while 
                                           (condition statement) 
                                           (body statement) 
@@ -59,14 +71,6 @@
                                             (return_val statement) 
                                             state))
       (else (error (format "Invalid statement: ~s" statement))))))
-
-; abstraction for M_state
-(define function car)
-(define inner_statement car)
-(define stmt_list cdr)
-(define return_val cadr)
-(define body caddr)
-(define condition cadr)
 
 ; if statement. If condition is true,
 (define M_if
@@ -81,14 +85,11 @@
 ; while statement. While condition is true
 (define M_while
   (lambda (while_statement while_body state)
-    (vprintf "M_while called with while_statement: ~s, while_body: ~s, state: ~s\n" while_statement while_body state)
+    (vprintf "M_while called with while_statement: ~s, while_body: ~s, state: ~s\n" 
+              while_statement while_body state)
     (if (M_boolean while_statement state)
         (M_while while_statement while_body (M_state while_body state))
         state)))
-
-; abstraction for if/while
-(define body1 caddr)
-(define body2 cadddr)
 
 ; declare a variable
 (define M_declare
@@ -96,12 +97,10 @@
     (vprintf "M_declare called with statement: ~s and state: ~s\n" statement state)
     (cond
       ((var_exists? (varname statement) state) (error ("Variable already exists")))
-      ((has_value? statement) (var_dec_assn (varname statement) (M_value (varvalue statement) state) state))
+      ((has_value? statement) (var_dec_assn 
+                                (varname statement) 
+                                (M_value (varvalue statement) state) state))
       (else (var_dec (varname statement) state)))))
-
-
-; checks to see if a var declaration has a value to assign
-(define has_value? (lambda (statement) (if (null? (cddr statement)) #f #t)))
 
 ; assigns a value to a variable
 (define M_assign
@@ -111,9 +110,7 @@
       (var_assn (varname statement) (M_value (varvalue statement) state) state)
       (error (format "Variable not declared: ~s" (varname statement))))))
 
-; abstraction for declare and assign
-(define varname cadr)
-(define varvalue caddr)
+
 
 ; evaluates a mathematical expression
 (define M_value
@@ -125,11 +122,17 @@
       ((boolean? expression) expression)
       ((number? expression) expression)
       ((var? expression) (get_var expression state))
-      ((eq? '|| (op expression)) (or (M_boolean (x expression) state) (M_boolean (y expression) state)))
-      ((eq? '&& (op expression)) (and (M_boolean (x expression) state) (M_boolean (y expression) state)))
+      ((eq? '|| (op expression)) (or 
+                                  (M_boolean (x expression) state) 
+                                  (M_boolean (y expression) state)))
+      ((eq? '&& (op expression)) (and 
+                                  (M_boolean (x expression) state) 
+                                  (M_boolean (y expression) state)))
       ((eq? '! (op expression)) (not (M_boolean (x expression) state)))
       ((eq? '== (op expression)) (eq? (M_value (x expression) state) (M_value (y expression) state)))
-      ((eq? '!= (op expression)) (not (eq? (M_value (x expression) state) (M_value (y expression) state))))
+      ((eq? '!= (op expression)) (not (eq? 
+                                        (M_value (x expression) state) 
+                                        (M_value (y expression) state))))
       ((eq? '> (op expression)) (> (M_value (x expression) state) (M_value (y expression) state)))
       ((eq? '< (op expression)) (< (M_value (x expression) state) (M_value (y expression) state)))
       ((eq? '>= (op expression)) (>= (M_value (x expression) state) (M_value (y expression) state)))
@@ -137,30 +140,14 @@
       ((eq? '+ (op expression)) (+ (M_value (x expression) state) (M_value (y expression) state)))
       ((eq? '- (op expression)) (subtract expression state))
       ((eq? '* (op expression)) (* (M_value (x expression) state) (M_value (y expression) state)))
-      ((eq? '/ (op expression)) (quotient (M_value (x expression) state) (M_value (y expression) state)))
-      ((eq? '% (op expression)) (remainder (M_value (x expression) state) (M_value (y expression) state)))
+      ((eq? '/ (op expression)) (quotient 
+                                  (M_value (x expression) state) 
+                                  (M_value (y expression) state)))
+      ((eq? '% (op expression)) (remainder 
+                                  (M_value (x expression) state) 
+                                  (M_value (y expression) state)))
 
       (else (error "Invalid expression")))))
-
-; Checks to see if subtraction is a unary or binary operation
-(define subtract
-  (lambda (expression state)
-    (vprintf "subtract called with expression: ~s and state: ~s\n" expression state)
-    (cond 
-      ((null? (unary expression)) (- (M_value (x expression) state)))
-      (else (- (M_value (x expression) state) (M_value (y expression) state))))))
-
-; Checks to see if a atom could be variable
-(define var?
-  (lambda (x)
-    (vprintf "var? called with x: ~s\n" x)
-    (and (and (not (number? x)) (not (list? x))) (and (not (pair? x)) (not (bool_op? x))))))
-
-; Checks to see if a atom is a boolean operator
-(define bool_op?
-  (lambda (x)
-    (vprintf "bool_op? called with x: ~s\n" x)
-    (or (eq? 'false x) (or (eq? 'true x) (or (eq? '|| x) (or (eq? '&& x) (or (eq? '! x) (or (eq? '== x) (or (eq? '!= x) (or (eq? '> x) (or (eq? '< x) (or (eq? '>= x) (or (eq? '<= x) (boolean? x))))))))))))))
 
 ; evaluates a boolean expression  ==, !=, <, >, <=. >=
 (define M_boolean
@@ -171,23 +158,33 @@
       ((var? expression) (get_var expression state))
       ((eq? 'true expression) #t)
       ((eq? 'false expression) #f)
-      ((eq? '== (op expression)) (eq? (M_value (x expression) state) (M_value (y expression) state)))
-      ((eq? '!= (op expression)) (not (eq? (M_value (x expression) state) (M_value (y expression) state))))
-      ((eq? '> (op expression)) (> (M_value (x expression) state) (M_value (y expression) state)))
-      ((eq? '< (op expression)) (< (M_value (x expression) state) (M_value (y expression) state)))
-      ((eq? '>= (op expression)) (>= (M_value (x expression) state) (M_value (y expression) state)))
-      ((eq? '<= (op expression)) (<= (M_value (x expression) state) (M_value (y expression) state)))
-      ((eq? '&& (op expression)) (and (M_boolean (x expression) state) (M_boolean (y expression) state)))
-      ((eq? '|| (op expression)) (or (M_boolean (x expression) state) (M_boolean (y expression) state)))
+      ((eq? '== (op expression)) (eq? 
+                                  (M_value (x expression) state) 
+                                  (M_value (y expression) state)))
+      ((eq? '!= (op expression)) (not (eq? 
+                                        (M_value (x expression) state) 
+                                        (M_value (y expression) state))))
+      ((eq? '> (op expression)) (> 
+                                  (M_value (x expression) state) 
+                                  (M_value (y expression) state)))
+      ((eq? '< (op expression)) (< 
+                                  (M_value (x expression) state) 
+                                  (M_value (y expression) state)))
+      ((eq? '>= (op expression)) (>= 
+                                  (M_value (x expression) state) 
+                                  (M_value (y expression) state)))
+      ((eq? '<= (op expression)) (<= 
+                                  (M_value (x expression) state) 
+                                  (M_value (y expression) state)))
+      ((eq? '&& (op expression)) (and 
+                                  (M_boolean (x expression) state) 
+                                  (M_boolean (y expression) state)))
+      ((eq? '|| (op expression)) (or 
+                                  (M_boolean (x expression) state) 
+                                  (M_boolean (y expression) state)))
       ((eq? '! (op expression)) (not (M_boolean (x expression) state)))
       (else (error "invalid boolean expression"))
       )))
-
-; abstraction for M_value and M_boolean
-(define op car)
-(define x cadr)
-(define y caddr)
-(define unary cddr)
 
 ; return statement
 (define M_return
@@ -195,10 +192,10 @@
     (vprintf "M_return called with statement: ~s and state: ~s\n" statement state)
     (M_value statement state)))
 
+
 ;=======================================
 ;; Variable Logic
 ;=======================================
-
 ; Variable declaration, assigns var to null 
 (define var_dec
   (lambda (var state)
@@ -218,25 +215,16 @@
         (add_binding var (M_value val state) (remove_binding var state))
       (error (format "Variable not declared: ~s" var)))))
 
-; TODO: Implement while loop
-
 
 ;=======================================
 ;; State Logic
 ;=======================================
-
-; TODO abstraction for all state logic
-  
-; The state of the interpreter. Starts empty
-; Format (var_list val_list)
-(define init_state '(() ()))
-
 ; Calls append_var and append_val to map val to var within state
 (define append_state 
   (lambda (var val old_state)
     (vprintf "append_state called with var: ~s, val: ~s and old_state: ~s\n" var val old_state)
-    (cons (append_var var (car old_state))
-          (list (append_val val (car (cdr old_state)))))))
+    (cons (append_var var (vars old_state))
+          (list (append_val val (values old_state))))))
 
 ; Appends a value to the value list within state
 (define append_var
@@ -250,56 +238,39 @@
     (vprintf "append_val called with val: ~s and val_list: ~s\n" val val_list)
     (cons val val_list)))
 
-; Checks if a variable exists in the state
-; Returns true if it exists, false otherwise
-(define var_exists? 
-  (lambda (var state)
-    (vprintf "var_exists? called with var: ~s and state: ~s\n" var state)
-    (cond 
-      ((null? (car state)) #f)
-      ((equal? var (car (car state))) #t)
-      (else (var_exists? var (cons (cdr (car state)) (cdr state)))))))
-
-; Checks if a variable has been initialized with a value
-; Returns true if it has been initialized, false otherwise
-(define var_init?
-  (lambda (var state)
-    (vprintf "var_init? called with var: ~s and state: ~s\n" var state)
-    (cond
-      ((eq? #f (var_exists? var state)) #f)
-      ((null? (cdr state)) #f)
-      ((equal? var (car (car state))) (not (null? (car (cdr state)))))
-      (else (var_init? var (cons (cdr (car state)) (list (cdr (car (cdr state))))))))))
-
 ; Sets binding of var to val in the state
 (define remove_binding
   (lambda (var state)
     (vprintf "remove_binding called with var: ~s and state: ~s\n" var state)
-    (list (car state) (find_replace_val var (car state) (car (cdr state))))))
+    (list (vars state) (find_replace_val var (vars state) (values state)))))
 
 ; Helper for remove_binding, finds var and replace its val with null
 (define find_replace_val
   (lambda (var var_list val_list)
-    (vprintf "find_replace_val called with var: ~s, var_list: ~s, val_list: ~s\n" var var_list val_list)
+    (vprintf "find_replace_val called with var: ~s, var_list: ~s, val_list: ~s\n" 
+              var var_list val_list)
     (cond
       ((null? var_list) val_list)
-      ((equal? var (car var_list)) (cons null (cdr val_list))) ; Set binding to null
-      (else (cons (car val_list) (find_replace_val var (cdr var_list) (cdr val_list)))))))
+      ((equal? var (vars var_list)) (cons null (cdr val_list))) ; Set binding to null
+      (else (cons (vars val_list) 
+                  (find_replace_val var (next_item var_list) (next_item val_list)))))))
 
 ; Sets binding of var to val in the state
 (define add_binding
   (lambda (var val state)
     (vprintf "add_binding called with var: ~s, val: ~s, state: ~s\n" var val state)
-    (list (car state) (find_set_val var val (car state) (car (cdr state))))))
+    (list (vars state) (find_set_val var val (vars state) (values state)))))
 
 ; Helper for add_binding, finds var and replace its val with new val
 (define find_set_val
   (lambda (var val var_list val_list)
-    (vprintf "find_set_val called with var: ~s, val: ~s, var_list: ~s, val_list: ~s\n" var val var_list val_list)
+    (vprintf "find_set_val called with var: ~s, val: ~s, var_list: ~s, val_list: ~s\n" 
+              var val var_list val_list)
     (cond
       ((null? var_list) val_list) ;
-      ((equal? var (car var_list)) (cons val (cdr val_list))) ; Update binding
-      (else (cons (car val_list) (find_set_val var val (cdr var_list) (cdr val_list)))))))
+      ((equal? var (vars var_list)) (cons val (next_item val_list))) ; Update binding
+      (else (cons (vars val_list) 
+                  (find_set_val var val (next_item var_list) (next_item val_list)))))))
 
 ; Gets the value of a variable in the state
 (define get_var
@@ -315,15 +286,73 @@
   (lambda (var state)
     (vprintf "find_var called with var: ~s and state: ~s\n" var state)
     (cond
-      ((or (null? (vars state)) (null? (values state))) (error (format "Variable not in state: ~s" var)))
+      ((or (null? (vars state)) (null? (values state))) (error 
+                                                          (format "Variable not in state: ~s" var)))
       ((eq? var (first_var_name state)) (find_var_helper (first_value state)))
       (else (get_var var (cons (other_vars state) (list (other_values state))))))))
-(define vars car)
-(define values cadr)
-(define first_var_name caar)
-(define first_value caadr)
-(define other_vars cdar)
-(define other_values cdadr)
+
+
+;=======================================
+;; Helper Functions
+;=======================================
+; The state of the interpreter. Starts empty
+; Format (var_list val_list)
+(define init_state '(() ()))
+
+; checks to see if a var declaration has a value to assign
+(define has_value? (lambda (statement) (if (null? (cddr statement)) #f #t)))
+
+; Checks to see if subtraction is a unary or binary operation
+(define subtract
+  (lambda (expression state)
+    (vprintf "subtract called with expression: ~s and state: ~s\n" expression state)
+    (cond 
+      ((null? (unary expression)) (- (M_value (x expression) state)))
+      (else (- (M_value (x expression) state) (M_value (y expression) state))))))
+
+; Checks to see if a atom could be variable
+(define var?
+  (lambda (x)
+    (vprintf "var? called with x: ~s\n" x)
+    (and (and (not (number? x)) (not (list? x))) (and (not (pair? x)) (not (bool_op? x))))))
+
+; Checks to see if a atom is a boolean operator
+(define bool_op?
+  (lambda (x)
+    (vprintf "bool_op? called with x: ~s\n" x)
+    (or (eq? 'false x) 
+        (or (eq? 'true x) 
+            (or (eq? '|| x) 
+                (or (eq? '&& x) 
+                    (or (eq? '! x) 
+                        (or (eq? '== x) 
+                            (or (eq? '!= x) 
+                                (or (eq? '> x) 
+                                    (or (eq? '< x) 
+                                        (or (eq? '>= x) 
+                                            (or (eq? '<= x) (boolean? x))))))))))))))
+
+; Checks if a variable exists in the state
+; Returns true if it exists, false otherwise
+(define var_exists? 
+  (lambda (var state)
+    (vprintf "var_exists? called with var: ~s and state: ~s\n" var state)
+    (cond 
+      ((null? (vars state)) #f)
+      ((equal? var (first_var_name state)) #t)
+      (else (var_exists? var (cons (other_vars state) (next_item state)))))))
+
+; Checks if a variable has been initialized with a value
+; Returns true if it has been initialized, false otherwise
+(define var_init?
+  (lambda (var state)
+    (vprintf "var_init? called with var: ~s and state: ~s\n" var state)
+    (cond
+      ((eq? #f (var_exists? var state)) #f)
+      ((null? (next_item state)) #f)
+      ((equal? var (first_var_name state)) (not (null? (values state))))
+      (else (var_init? var (cons (other_vars state) (list (other_values state))))))))
+
 ; Helper for find_var, checks if var has been intialized
 (define find_var_helper
   (lambda (value)
@@ -331,6 +360,38 @@
     (cond
       ((eq? value 'null) (error "Variable not initialized"))
       (else value))))
+
+
 ;=======================================
-;; Helper Functions
+;; Abstractions
 ;=======================================
+; abstraction for M_state
+(define function car)
+(define inner_statement car)
+(define stmt_list cdr)
+(define return_val cadr)
+(define body caddr)
+(define condition cadr)
+
+; abstraction for if/while
+(define body1 caddr)
+(define body2 cadddr)
+
+; abstraction for declare and assign
+(define varname cadr)
+(define varvalue caddr)
+
+; abstraction for M_value and M_boolean
+(define op car)
+(define x cadr)
+(define y caddr)
+(define unary cddr)
+
+; Abstraction for state logic
+(define vars car)
+(define values cadr)
+(define first_var_name caar)
+(define first_value caadr)
+(define other_vars cdar)
+(define other_values cdadr)
+(define next_item cdr)
