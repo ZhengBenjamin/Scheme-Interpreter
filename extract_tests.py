@@ -13,12 +13,12 @@ def extract_tests(html_file, output_dir):
     for i, pre in enumerate(pre_blocks, start=1):
         # Strip leading and trailing whitespace
         test_code = pre.get_text().strip()  
-        test_file = os.path.join(output_dir, f'test{i}.txt')
+        test_file = os.path.join(output_dir, f'P2test{i}.txt')
         with open(test_file, 'w') as file:
             file.write(test_code)
 
 
 if __name__ == "__main__": 
-    html_file = 'part1tests.html'
+    html_file = 'part2tests.html'
     output_dir = 'tests'
     extract_tests(html_file, output_dir)
