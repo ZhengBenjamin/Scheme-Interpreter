@@ -220,6 +220,18 @@
 ;=====================================================================================================
 ;; State Logic
 ;=====================================================================================================
+; Adds a nested state
+(define add_nested_state
+  (lambda (state)
+    (vprintf "add_nested_state called with state: ~s\n" state)
+    (cons (cons '() (vars state)) (list (cons '() (values state))))))
+
+; Removes a nested state
+(define remove_nested_state
+  (lambda (state)
+    (vprintf "remove_nested_state called with state: ~s\n" state)
+    (cons (cdar state) (list (cdadr state)))))
+
 ; Calls append_var and append_val to map val to var within state
 (define append_state
   (lambda (var val old_state)
