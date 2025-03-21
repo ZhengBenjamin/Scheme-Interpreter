@@ -3,18 +3,18 @@
 (provide (all-defined-out))
 
 
-;=======================================
+;=====================================================================================================
 ;; Interpreter 
 ;; Henry Odza, Tyler Powers, and Benjamin Zheng 
 ;;
 ;; CSDS 345
-;=======================================
+;=====================================================================================================
 
 
-;=======================================
+;=====================================================================================================
 ;; Verbose Flag and print helper function
 ;; Used for debugging, set verbose to #t to see print statements
-;=======================================
+;=====================================================================================================
 ; Verbose flag to control print statements
 (define verbose #f)
 
@@ -24,10 +24,11 @@
     (apply printf fmt args)))
 
 
-;=======================================
+;=====================================================================================================
 ;; Interpreter
-;; The main interpreter function that calls the parser and M_state, formater will take the output of M_state and format it for the user
-;=======================================
+;; The main interpreter function that calls the parser and M_state, formater will take the output of 
+;; M_state and format it for the user
+;=====================================================================================================
 ; Calls the parser on the input file 
 ; Input: input file with code
 (define interpret
@@ -42,10 +43,10 @@
       (else input))))
 
 
-;=======================================
+;=====================================================================================================
 ;; M_ functions
 ;; These functions are the main stateful functions that are called by the parser
-;=======================================
+;=====================================================================================================
 (define M_state
   (lambda (statement state)
     (vprintf "M_state called with statement: ~s and state: ~s\n" statement state)
@@ -193,9 +194,9 @@
     (M_value statement state)))
 
 
-;=======================================
+;=====================================================================================================
 ;; Variable Logic
-;=======================================
+;=====================================================================================================
 ; Variable declaration, assigns var to null 
 (define var_dec
   (lambda (var state)
@@ -216,11 +217,23 @@
       (error (format "Variable not declared: ~s" var)))))
 
 
-;=======================================
+;=====================================================================================================
 ;; State Logic
-;=======================================
+;=====================================================================================================
+; Adds a nested state
+(define add_nested_state
+  (lambda (state)
+    (vprintf "add_nested_state called with state: ~s\n" state)
+    (cons (cons '() (vars state)) (list (cons '() (values state))))))
+
+; Removes a nested state
+(define remove_nested_state
+  (lambda (state)
+    (vprintf "remove_nested_state called with state: ~s\n" state)
+    (cons (cdar state) (list (cdadr state)))))
+
 ; Calls append_var and append_val to map val to var within state
-(define append_state 
+(define append_state
   (lambda (var val old_state)
     (vprintf "append_state called with var: ~s, val: ~s and old_state: ~s\n" var val old_state)
     (cons (append_var var (vars old_state))
@@ -230,13 +243,19 @@
 (define append_var
   (lambda (var var_list)
     (vprintf "append_var called with var: ~s and var_list: ~s\n" var var_list)
-    (cons var var_list)))
+    (cond
+      ((null? var_list) (cons var var_list))
+      ((list? (car var_list)) (cons (append_var var (car var_list)) (cdr var_list)))
+      (else (cons var var_list)))))
 
 ; Appends a variable to the variable list within state
 (define append_val
   (lambda (val val_list)
     (vprintf "append_val called with val: ~s and val_list: ~s\n" val val_list)
-    (cons val val_list)))
+    (cond
+      ((null? val_list) (cons val val_list))
+      ((list? (car val_list)) (cons (append_val val (car val_list)) (cdr val_list)))
+      (else (cons val val_list)))))
 
 ; Sets binding of var to val in the state
 (define remove_binding
@@ -251,6 +270,9 @@
               var var_list val_list)
     (cond
       ((null? var_list) val_list)
+      ((list? (first_item var_list)) (cons 
+                                      (find_replace_val var (first_item var_list) (first_item val_list))
+                                      (find_replace_val var (next_item var_list) (next_item val_list))))
       ((equal? var (vars var_list)) (cons null (cdr val_list))) ; Set binding to null
       (else (cons (vars val_list) 
                   (find_replace_val var (next_item var_list) (next_item val_list)))))))
@@ -268,6 +290,9 @@
               var val var_list val_list)
     (cond
       ((null? var_list) val_list) ;
+      ((list? (first_item var_list)) (cons 
+                                      (find_set_val var val (first_item var_list) (first_item val_list))
+                                      (find_set_val var val (next_item var_list) (next_item val_list))))
       ((equal? var (vars var_list)) (cons val (next_item val_list))) ; Update binding
       (else (cons (vars val_list) 
                   (find_set_val var val (next_item var_list) (next_item val_list)))))))
@@ -284,17 +309,29 @@
 ; Helper for get_var, finds var and returns its value
 (define find_var
   (lambda (var state)
-    (vprintf "find_var called with var: ~s and state: ~s\n" var state)
+    (vprintf "find_var called with var: ~s and state: ~s\n" var state)  
     (cond
       ((or (null? (vars state)) (null? (values state))) (error 
                                                           (format "Variable not in state: ~s" var)))
+      ((list? (first_var_name state)) (if (find_nested_var var (first_var_name state))
+                                          (find_var var (list (first_var_name state) (first_value state)))
+                                          (find_var var (list (cadr state) (cddr state)))))
       ((eq? var (first_var_name state)) (find_var_helper (first_value state)))
       (else (get_var var (cons (other_vars state) (list (other_values state))))))))
 
+(define find_nested_var
+  (lambda (var state)
+    (vprintf "find_nested_var called with var: ~s and state: ~s\n" var state)
+    (cond
+      ((null? (vars state)) #f)
+      ((list? (first_item state)) (or (find_nested_var var (first_item state)) 
+                                      (find_nested_var var (next_item state))))
+      ((eq? var (first_item state)) #t)
+      (else (find_nested_var var (next_item state))))))
 
-;=======================================
+;=====================================================================================================
 ;; Helper Functions
-;=======================================
+;=====================================================================================================
 ; The state of the interpreter. Starts empty
 ; Format (var_list val_list)
 (define init_state '(() ()))
@@ -339,6 +376,8 @@
     (vprintf "var_exists? called with var: ~s and state: ~s\n" var state)
     (cond 
       ((null? (vars state)) #f)
+      ((list? (first_var_name state)) (or (var_exists? var (first_item state)) 
+                                      (var_exists? var (next_item state))))
       ((equal? var (first_var_name state)) #t)
       (else (var_exists? var (cons (other_vars state) (next_item state)))))))
 
@@ -348,6 +387,8 @@
   (lambda (var state)
     (vprintf "var_init? called with var: ~s and state: ~s\n" var state)
     (cond
+      ((list? (first_var_name state)) (or (var_init? var (first_item state)) 
+                                (var_init? var (next_item state))))
       ((eq? #f (var_exists? var state)) #f)
       ((null? (next_item state)) #f)
       ((equal? var (first_var_name state)) (not (null? (values state))))
@@ -362,9 +403,9 @@
       (else value))))
 
 
-;=======================================
+;=====================================================================================================
 ;; Abstractions
-;=======================================
+;=====================================================================================================
 ; abstraction for M_state
 (define function car)
 (define inner_statement car)
@@ -395,3 +436,4 @@
 (define other_vars cdar)
 (define other_values cdadr)
 (define next_item cdr)
+(define first_item car)
