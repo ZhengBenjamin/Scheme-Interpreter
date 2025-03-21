@@ -16,7 +16,7 @@
 ;; Used for debugging, set verbose to #t to see print statements
 ;=====================================================================================================
 ; Verbose flag to control print statements
-(define verbose #t)
+(define verbose #f)
 
 ; Helper function for conditional printing
 (define (vprintf fmt . args)
@@ -258,6 +258,9 @@
               var var_list val_list)
     (cond
       ((null? var_list) val_list)
+      ((list? (first_item var_list)) (cons 
+                                      (find_replace_val var (first_item var_list) (first_item val_list))
+                                      (find_replace_val var (next_item var_list) (next_item val_list))))
       ((equal? var (vars var_list)) (cons null (cdr val_list))) ; Set binding to null
       (else (cons (vars val_list) 
                   (find_replace_val var (next_item var_list) (next_item val_list)))))))
@@ -275,6 +278,9 @@
               var val var_list val_list)
     (cond
       ((null? var_list) val_list) ;
+      ((list? (first_item var_list)) (cons 
+                                      (find_set_val var val (first_item var_list) (first_item val_list))
+                                      (find_set_val var val (next_item var_list) (next_item val_list))))
       ((equal? var (vars var_list)) (cons val (next_item val_list))) ; Update binding
       (else (cons (vars val_list) 
                   (find_set_val var val (next_item var_list) (next_item val_list)))))))
@@ -402,3 +408,4 @@
 (define other_vars cdar)
 (define other_values cdadr)
 (define next_item cdr)
+(define first_item car)
