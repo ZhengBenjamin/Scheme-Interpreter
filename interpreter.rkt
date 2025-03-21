@@ -3,20 +3,20 @@
 (provide (all-defined-out))
 
 
-;=======================================
+;=====================================================================================================
 ;; Interpreter 
 ;; Henry Odza, Tyler Powers, and Benjamin Zheng 
 ;;
 ;; CSDS 345
-;=======================================
+;=====================================================================================================
 
 
-;=======================================
+;=====================================================================================================
 ;; Verbose Flag and print helper function
 ;; Used for debugging, set verbose to #t to see print statements
-;=======================================
+;=====================================================================================================
 ; Verbose flag to control print statements
-(define verbose #f)
+(define verbose #t)
 
 ; Helper function for conditional printing
 (define (vprintf fmt . args)
@@ -24,10 +24,11 @@
     (apply printf fmt args)))
 
 
-;=======================================
+;=====================================================================================================
 ;; Interpreter
-;; The main interpreter function that calls the parser and M_state, formater will take the output of M_state and format it for the user
-;=======================================
+;; The main interpreter function that calls the parser and M_state, formater will take the output of 
+;; M_state and format it for the user
+;=====================================================================================================
 ; Calls the parser on the input file 
 ; Input: input file with code
 (define interpret
@@ -42,10 +43,10 @@
       (else input))))
 
 
-;=======================================
+;=====================================================================================================
 ;; M_ functions
 ;; These functions are the main stateful functions that are called by the parser
-;=======================================
+;=====================================================================================================
 (define M_state
   (lambda (statement state)
     (vprintf "M_state called with statement: ~s and state: ~s\n" statement state)
@@ -193,9 +194,9 @@
     (M_value statement state)))
 
 
-;=======================================
+;=====================================================================================================
 ;; Variable Logic
-;=======================================
+;=====================================================================================================
 ; Variable declaration, assigns var to null 
 (define var_dec
   (lambda (var state)
@@ -216,11 +217,11 @@
       (error (format "Variable not declared: ~s" var)))))
 
 
-;=======================================
+;=====================================================================================================
 ;; State Logic
-;=======================================
+;=====================================================================================================
 ; Calls append_var and append_val to map val to var within state
-(define append_state 
+(define append_state
   (lambda (var val old_state)
     (vprintf "append_state called with var: ~s, val: ~s and old_state: ~s\n" var val old_state)
     (cons (append_var var (vars old_state))
@@ -230,13 +231,19 @@
 (define append_var
   (lambda (var var_list)
     (vprintf "append_var called with var: ~s and var_list: ~s\n" var var_list)
-    (cons var var_list)))
+    (cond
+      ((null? var_list) (cons var var_list))
+      ((list? (car var_list)) (cons (append_var var (car var_list)) (cdr var_list)))
+      (else (cons var var_list)))))
 
 ; Appends a variable to the variable list within state
 (define append_val
   (lambda (val val_list)
     (vprintf "append_val called with val: ~s and val_list: ~s\n" val val_list)
-    (cons val val_list)))
+    (cond
+      ((null? val_list) (cons val val_list))
+      ((list? (car val_list)) (cons (append_val val (car val_list)) (cdr val_list)))
+      (else (cons val val_list)))))
 
 ; Sets binding of var to val in the state
 (define remove_binding
@@ -292,9 +299,9 @@
       (else (get_var var (cons (other_vars state) (list (other_values state))))))))
 
 
-;=======================================
+;=====================================================================================================
 ;; Helper Functions
-;=======================================
+;=====================================================================================================
 ; The state of the interpreter. Starts empty
 ; Format (var_list val_list)
 (define init_state '(() ()))
@@ -362,9 +369,9 @@
       (else value))))
 
 
-;=======================================
+;=====================================================================================================
 ;; Abstractions
-;=======================================
+;=====================================================================================================
 ; abstraction for M_state
 (define function car)
 (define inner_statement car)
