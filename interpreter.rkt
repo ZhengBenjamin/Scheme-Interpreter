@@ -297,13 +297,25 @@
 ; Helper for get_var, finds var and returns its value
 (define find_var
   (lambda (var state)
-    (vprintf "find_var called with var: ~s and state: ~s\n" var state)
+    (vprintf "find_var called with var: ~s and state: ~s\n" var state)  
     (cond
       ((or (null? (vars state)) (null? (values state))) (error 
                                                           (format "Variable not in state: ~s" var)))
+      ((list? (first_var_name state)) (if (find_nested_var var (first_var_name state))
+                                          (find_var var (list (first_var_name state) (first_value state)))
+                                          (find_var var (list (cadr state) (cddr state)))))
       ((eq? var (first_var_name state)) (find_var_helper (first_value state)))
       (else (get_var var (cons (other_vars state) (list (other_values state))))))))
 
+(define find_nested_var
+  (lambda (var state)
+    (vprintf "find_nested_var called with var: ~s and state: ~s\n" var state)
+    (cond
+      ((null? (vars state)) #f)
+      ((list? (first_item state)) (or (find_nested_var var (first_item state)) 
+                                      (find_nested_var var (next_item state))))
+      ((eq? var (first_item state)) #t)
+      (else (find_nested_var var (next_item state))))))
 
 ;=====================================================================================================
 ;; Helper Functions
@@ -352,6 +364,8 @@
     (vprintf "var_exists? called with var: ~s and state: ~s\n" var state)
     (cond 
       ((null? (vars state)) #f)
+      ((list? (first_var_name state)) (or (var_exists? var (first_item state)) 
+                                      (var_exists? var (next_item state))))
       ((equal? var (first_var_name state)) #t)
       (else (var_exists? var (cons (other_vars state) (next_item state)))))))
 
@@ -361,6 +375,8 @@
   (lambda (var state)
     (vprintf "var_init? called with var: ~s and state: ~s\n" var state)
     (cond
+      ((list? (first_var_name state)) (or (var_init? var (first_item state)) 
+                                (var_init? var (next_item state))))
       ((eq? #f (var_exists? var state)) #f)
       ((null? (next_item state)) #f)
       ((equal? var (first_var_name state)) (not (null? (values state))))
