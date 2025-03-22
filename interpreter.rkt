@@ -50,31 +50,39 @@
 
 (define M_state
   (lambda (statement state)
+    (M_state_cps statement state (lambda (v) v))))
+
+(define M_state_cps
+  (lambda (statement state return)
     (vprintf "M_state called with statement: ~s and state: ~s\n" statement state)
     (cond
-      ((null? statement) state)
-      ((list? (function statement)) (M_state 
-                                      (stmt_list statement) 
-                                      (M_state (function statement) state)))
-      ((eq? (function statement) 'begin) (remove_nested_state 
-                                          (M_state (stmt_list statement)
-                                                   (add_nested_state state))))
-      ((eq? (function statement) 'var) (M_declare
-                                          statement
-                                          state))
-      ((eq? (function statement) '=) (M_assign
-                                        statement 
-                                        state))
-      ((eq? (function statement) 'while) (M_while 
-                                          (condition statement) 
-                                          (body statement) 
-                                          state))
-      ((eq? (function statement) 'if) (M_if 
-                                        statement
-                                        state))
-      ((eq? (function statement) 'return) (M_return 
-                                            (return_val statement) 
-                                            state))
+      ((null? statement) (return state))
+
+      ((list? (function statement)) 
+        (M_state_cps (function statement) state 
+          (lambda (v1) 
+            (M_state_cps (stmt_list statement) v1 return))))
+
+      ((eq? (function statement) 'begin) 
+        (M_state_cps (stmt_list statement) (add_nested_state state)
+          (lambda (v1)
+            (return (remove_nested_state v1)))))
+
+      ((eq? (function statement) 'var)
+        (return (M_declare statement state)))
+
+      ((eq? (function statement) '=) 
+        (return (M_assign statement state)))
+
+      ((eq? (function statement) 'while) 
+        (return (M_while (condition statement) (body statement) state)))
+
+      ((eq? (function statement) 'if) 
+        (return (M_if statement state)))
+
+      ((eq? (function statement) 'return) 
+        (return (M_return (return_val statement) state)))
+
       (else (error (format "Invalid statement: ~s" statement))))))
 
 ; if statement. If condition is true,
