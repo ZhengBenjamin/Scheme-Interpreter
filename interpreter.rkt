@@ -317,21 +317,21 @@
     (cond
       ((or (null? (vars state)) (null? (values state))) (error 
                                                           (format "Variable not in state: ~s" var)))
-      ((list? (first_var_name state)) (if (find_nested_var var (block_state state))
-                                          (find_var var (block_state state))
-                                          (find_var var (other_state state))))
-      ((eq? var (first_var_name state)) (find_var_helper (first_value state)))
-      (else (get_var var (cons (other_vars state) (list (other_values state))))))))
+      ((list? (first_var state)) (if (find_nested_var var (top_state state))
+                                          (find_var var (top_state state))
+                                          (find_var var (remain_state state))))
+      ((eq? var (first_var state)) (find_var_helper (first_value state)))
+      (else (get_var var (remain_state state))))))
 
 (define find_nested_var
   (lambda (var state)
     (vprintf "find_nested_var called with var: ~s and state: ~s\n" var state)
     (cond
       ((null? (vars state)) #f)
-      ((list? (first_var_name state)) (or (find_nested_var var (block_state state)) 
-                                      (find_nested_var var (other_state state))))
-      ((equal? var (first_var_name state)) #t)
-      (else (find_nested_var var (other_state state))))))
+      ((list? (first_var state)) (or (find_nested_var var (top_state state)) 
+                                      (find_nested_var var (remain_state state))))
+      ((equal? var (first_var state)) #t)
+      (else (find_nested_var var (remain_state state))))))
 
 ;=====================================================================================================
 ;; Helper Functions
@@ -380,10 +380,10 @@
     (vprintf "var_exists? called with var: ~s and state: ~s\n" var state)
     (cond 
       ((null? (vars state)) #f)
-      ((list? (first_var_name state)) (or (var_exists? var (block_state state)) 
-                                      (var_exists? var (other_state state))))
-      ((equal? var (first_var_name state)) #t)
-      (else (var_exists? var (other_state state))))))
+      ((list? (first_var state)) (or (var_exists? var (top_state state)) 
+                                      (var_exists? var (remain_state state))))
+      ((equal? var (first_var state)) #t)
+      (else (var_exists? var (remain_state state))))))
 
 ; Checks if a variable has been initialized with a value
 ; Returns true if it has been initialized, false otherwise
@@ -391,11 +391,12 @@
   (lambda (var state)
     (vprintf "var_init? called with var: ~s and state: ~s\n" var state)
     (cond
-      ((list? (first_var_name state)) (or (var_init? var (block_state state)) 
-                                      (var_init? var (other_state state))))
+      ((null? (vars state)) #f)
+      ((list? (first_var state)) (or (var_init? var (top_state state)) 
+                                      (var_init? var (remain_state state))))
       ((eq? #f (var_exists? var state)) #f)
       ((null? (next_item state)) #f)
-      ((equal? var (first_var_name state)) (not (null? (values state))))
+      ((equal? var (first_var state)) (not (null? (values state))))
       (else (var_init? var (cons (other_vars state) (list (other_values state))))))))
 
 ; Helper for find_var, checks if var has been intialized
@@ -407,15 +408,15 @@
       (else value))))
 
 ; Generates state for first block in state
-(define block_state
+(define top_state
   (lambda (state)
-    (vprintf "block_state called with state: ~s\n" state)
-    (cons (first_var_name state) (list (first_value state)))))
+    (vprintf "top_state called with state: ~s\n" state)
+    (cons (first_var state) (list (first_value state)))))
 
 ; Generates state for excluding first block in state
-(define other_state
+(define remain_state
   (lambda (state)
-    (vprintf "other_state called with state: ~s\n" state)
+    (vprintf "remain_state called with state: ~s\n" state)
     (cons (other_vars state) (list (other_values state)))))
 
 
@@ -447,7 +448,7 @@
 ; Abstraction for state logic
 (define vars car)
 (define values cadr)
-(define first_var_name caar)
+(define first_var caar)
 (define first_value caadr)
 (define other_vars cdar)
 (define other_values cdadr)
