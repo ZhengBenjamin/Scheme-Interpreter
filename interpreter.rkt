@@ -16,7 +16,7 @@
 ;; Used for debugging, set verbose to #t to see print statements
 ;=====================================================================================================
 ; Verbose flag to control print statements
-(define verbose #f)
+(define verbose #t)
 
 ; Helper function for conditional printing
 (define (vprintf fmt . args)
@@ -47,6 +47,7 @@
 ;; M_ functions
 ;; These functions are the main stateful functions that are called by the parser
 ;=====================================================================================================
+
 (define M_state
   (lambda (statement state)
     (vprintf "M_state called with statement: ~s and state: ~s\n" statement state)
@@ -55,6 +56,9 @@
       ((list? (function statement)) (M_state 
                                       (stmt_list statement) 
                                       (M_state (function statement) state)))
+      ((eq? (function statement) 'begin) (remove_nested_state 
+                                          (M_state (stmt_list statement)
+                                                   (add_nested_state state))))
       ((eq? (function statement) 'var) (M_declare
                                           statement
                                           state))
@@ -313,9 +317,9 @@
     (cond
       ((or (null? (vars state)) (null? (values state))) (error 
                                                           (format "Variable not in state: ~s" var)))
-      ((list? (first_var_name state)) (if (find_nested_var var (first_var_name state))
-                                          (find_var var (list (first_var_name state) (first_value state)))
-                                          (find_var var (list (cadr state) (cddr state)))))
+      ((list? (first_var_name state)) (if (find_nested_var var (block_state state))
+                                          (find_var var (block_state state))
+                                          (find_var var (other_state state))))
       ((eq? var (first_var_name state)) (find_var_helper (first_value state)))
       (else (get_var var (cons (other_vars state) (list (other_values state))))))))
 
@@ -324,10 +328,10 @@
     (vprintf "find_nested_var called with var: ~s and state: ~s\n" var state)
     (cond
       ((null? (vars state)) #f)
-      ((list? (first_item state)) (or (find_nested_var var (first_item state)) 
-                                      (find_nested_var var (next_item state))))
-      ((eq? var (first_item state)) #t)
-      (else (find_nested_var var (next_item state))))))
+      ((list? (first_var_name state)) (or (find_nested_var var (block_state state)) 
+                                      (find_nested_var var (other_state state))))
+      ((equal? var (first_var_name state)) #t)
+      (else (find_nested_var var (other_state state))))))
 
 ;=====================================================================================================
 ;; Helper Functions
@@ -376,10 +380,10 @@
     (vprintf "var_exists? called with var: ~s and state: ~s\n" var state)
     (cond 
       ((null? (vars state)) #f)
-      ((list? (first_var_name state)) (or (var_exists? var (first_item state)) 
-                                      (var_exists? var (next_item state))))
+      ((list? (first_var_name state)) (or (var_exists? var (block_state state)) 
+                                      (var_exists? var (other_state state))))
       ((equal? var (first_var_name state)) #t)
-      (else (var_exists? var (cons (other_vars state) (next_item state)))))))
+      (else (var_exists? var (other_state state))))))
 
 ; Checks if a variable has been initialized with a value
 ; Returns true if it has been initialized, false otherwise
@@ -387,8 +391,8 @@
   (lambda (var state)
     (vprintf "var_init? called with var: ~s and state: ~s\n" var state)
     (cond
-      ((list? (first_var_name state)) (or (var_init? var (first_item state)) 
-                                (var_init? var (next_item state))))
+      ((list? (first_var_name state)) (or (var_init? var (block_state state)) 
+                                      (var_init? var (other_state state))))
       ((eq? #f (var_exists? var state)) #f)
       ((null? (next_item state)) #f)
       ((equal? var (first_var_name state)) (not (null? (values state))))
@@ -401,6 +405,18 @@
     (cond
       ((eq? value 'null) (error "Variable not initialized"))
       (else value))))
+
+; Generates state for first block in state
+(define block_state
+  (lambda (state)
+    (vprintf "block_state called with state: ~s\n" state)
+    (cons (first_var_name state) (list (first_value state)))))
+
+; Generates state for excluding first block in state
+(define other_state
+  (lambda (state)
+    (vprintf "other_state called with state: ~s\n" state)
+    (cons (other_vars state) (list (other_values state)))))
 
 
 ;=====================================================================================================
