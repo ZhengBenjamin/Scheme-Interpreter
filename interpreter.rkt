@@ -65,8 +65,13 @@
                                      break continue throw))
       
       ((eq? (function statement) 'begin)
-       (M_state (stmt_list statement) (add_nested_state state)
-                return next break continue throw))
+       (M_state (stmt_list statement) 
+                (add_nested_state state) 
+                return
+                (lambda (v) (next (remove_nested_state v))) 
+                (lambda (v) (break (remove_nested_state v))) 
+                (lambda (v) (continue (remove_nested_state v)))
+                throw))
       
       ((eq? (function statement) 'var) (next (M_declare
                                               statement
@@ -82,20 +87,8 @@
       ((eq? (function statement) 'return) (return (M_return
                                                    (return_val statement)
                                                    state)))
-      ; ((eq? (function statement) 'var)
-      ;   (return (M_declare statement state)))
-
-      ; ((eq? (function statement) '=) 
-      ;   (return (M_assign statement state)))
-
-      ; ((eq? (function statement) 'while) 
-      ;   (return (M_while (condition statement) (body statement) state return next break continue throw)))
-
-      ; ((eq? (function statement) 'if) 
-      ;   (return (M_if statement state)))
-
-      ; ((eq? (function statement) 'return) 
-      ;   (M_return (return_val statement) state))
+      ((eq? (function statement) 'break) (break state))
+      ((eq? (function statement) 'continue) (continue state))
 
       (else (error (format "Invalid statement: ~s" statement))))))
 
@@ -125,12 +118,23 @@
 ;                  (M_state while_body state return next break continue throw)
 ;                  return next break continue throw)
 ;         (next state))))
+; (define M_while
+;   (lambda (while_statement while_body state return next break continue throw)
+;     (vprintf "M_while called with while_statement: ~s, while_body: ~s, state: ~s\n" 
+;               while_statement while_body state)
+;     (if (M_boolean while_statement state)
+;         (M_while while_statement while_body (M_state while_body state return (lambda (v) v) break continue throw) return (lambda (v) v) break continue throw)
+;         (next state))))
 (define M_while
   (lambda (while_statement while_body state return next break continue throw)
     (vprintf "M_while called with while_statement: ~s, while_body: ~s, state: ~s\n" 
               while_statement while_body state)
     (if (M_boolean while_statement state)
-        (M_while while_statement while_body (M_state while_body state return (lambda (v) v) break continue throw) return next break continue throw)
+        (M_state while_body state return 
+                 (lambda (v) (M_while while_statement while_body v return next break continue throw)) 
+                 (lambda (v) (next v))
+                 (lambda (v) (M_while while_statement while_body v return next break continue throw))
+                 throw)
         (next state))))
 ; declare a variable
 (define M_declare
