@@ -16,7 +16,7 @@
 ;; Used for debugging, set verbose to #t to see print statements
 ;=====================================================================================================
 ; Verbose flag to control print statements
-(define verbose #f)
+(define verbose #t)
 
 ; Helper function for conditional printing
 (define (vprintf fmt . args)
@@ -33,7 +33,7 @@
 ; Input: input file with code
 (define interpret
   (lambda (input)
-    (formater (M_state (parser input) init_state))))
+    (M_state (parser input) init_state d_return d_next d_break d_continue d_throw)))
 
 (define formater
   (lambda (input)
@@ -47,30 +47,39 @@
 ;; M_ functions
 ;; These functions are the main stateful functions that are called by the parser
 ;=====================================================================================================
+
 (define M_state
-  (lambda (statement state)
-    (vprintf "M_state called with statement: ~s and state: ~s\n" statement state)
+  (lambda (statement state return next break continue throw)
+    (vprintf "M_state called, statement: ~s, state: ~s, next: ~s, break: ~s, continue: ~s, throw: ~s\n" statement state next break continue throw)
     (cond
-      ((null? statement) state)
-      ((list? (function statement)) (M_state 
-                                      (stmt_list statement) 
-                                      (M_state (function statement) state)))
-      ((eq? (function statement) 'var) (M_declare
-                                          statement
-                                          state))
-      ((eq? (function statement) '=) (M_assign
-                                        statement 
-                                        state))
-      ((eq? (function statement) 'while) (M_while 
-                                          (condition statement) 
-                                          (body statement) 
-                                          state))
-      ((eq? (function statement) 'if) (M_if 
-                                        statement
-                                        state))
-      ((eq? (function statement) 'return) (M_return 
-                                            (return_val statement) 
-                                            state))
+      ((null? statement) (return state))
+
+      ((list? (function statement)) 
+        (M_state (function statement) state
+          (lambda (v1) 
+            (M_state (stmt_list statement) v1 return next break continue throw)) 
+            next break continue throw))
+
+      ((eq? (function statement) 'begin) 
+        (M_state (stmt_list statement) (add_nested_state state)
+          (lambda (v1)
+            (return (remove_nested_state v1))) next break continue throw))
+
+      ((eq? (function statement) 'var)
+        (return (M_declare statement state)))
+
+      ((eq? (function statement) '=) 
+        (return (M_assign statement state)))
+
+      ((eq? (function statement) 'while) 
+        (return (M_while (condition statement) (body statement) state return next break continue throw)))
+
+      ((eq? (function statement) 'if) 
+        (return (M_if statement state)))
+
+      ((eq? (function statement) 'return) 
+        (M_return (return_val statement) state))
+
       (else (error (format "Invalid statement: ~s" statement))))))
 
 ; if statement. If condition is true,
@@ -78,19 +87,24 @@
   (lambda (statement state)
     (vprintf "M_if called with statement: ~s, state: ~s\n" statement state)
     (if (M_boolean (condition statement) state)
-        (M_state (body1 statement) state)
+        (M_state (body1 statement) state d_return d_next d_break d_continue d_throw)
         (if (> 4 (length statement))
             state
-            (M_state (body2 statement) state)))))
+            (M_state (body2 statement) state d_return d_next d_break d_continue d_throw)))))
 
 ; while statement. While condition is true
 (define M_while
-  (lambda (while_statement while_body state)
-    (vprintf "M_while called with while_statement: ~s, while_body: ~s, state: ~s\n" 
-              while_statement while_body state)
+  (lambda (while_statement while_body state return next break continue throw)
+    (vprintf "M_while called with cond: ~s, body: ~s, st: ~s\n"
+             while_statement while_body state)
     (if (M_boolean while_statement state)
-        (M_while while_statement while_body (M_state while_body state))
-        state)))
+        (M_state while_body
+                 state
+                 (lambda (new-state)
+                   (M_while while_statement while_body new-state return next break continue throw))
+                 next break continue throw)
+        ;; If condition is false, loop is done => call return continuation
+        (return state))))
 
 ; declare a variable
 (define M_declare
@@ -190,8 +204,8 @@
 ; return statement
 (define M_return
   (lambda (statement state)
-    (vprintf "M_return called with statement: ~s and state: ~s\n" statement state)
-    (M_value statement state)))
+    (vprintf "M_return called with statement: ~s, state: ~s\n" statement state)
+    (formater (M_value statement state))))
 
 
 ;=====================================================================================================
@@ -313,28 +327,25 @@
     (cond
       ((or (null? (vars state)) (null? (values state))) (error 
                                                           (format "Variable not in state: ~s" var)))
-      ((list? (first_var_name state)) (if (find_nested_var var (first_var_name state))
-                                          (find_var var (list (first_var_name state) (first_value state)))
-                                          (find_var var (list (cadr state) (cddr state)))))
-      ((eq? var (first_var_name state)) (find_var_helper (first_value state)))
-      (else (get_var var (cons (other_vars state) (list (other_values state))))))))
+      ((list? (first_var state)) (if (find_nested_var var (top_state state))
+                                          (find_var var (top_state state))
+                                          (find_var var (remain_state state))))
+      ((eq? var (first_var state)) (find_var_helper (first_value state)))
+      (else (get_var var (remain_state state))))))
 
 (define find_nested_var
   (lambda (var state)
     (vprintf "find_nested_var called with var: ~s and state: ~s\n" var state)
     (cond
       ((null? (vars state)) #f)
-      ((list? (first_item state)) (or (find_nested_var var (first_item state)) 
-                                      (find_nested_var var (next_item state))))
-      ((eq? var (first_item state)) #t)
-      (else (find_nested_var var (next_item state))))))
+      ((list? (first_var state)) (or (find_nested_var var (top_state state)) 
+                                      (find_nested_var var (remain_state state))))
+      ((equal? var (first_var state)) #t)
+      (else (find_nested_var var (remain_state state))))))
 
 ;=====================================================================================================
 ;; Helper Functions
 ;=====================================================================================================
-; The state of the interpreter. Starts empty
-; Format (var_list val_list)
-(define init_state '(() ()))
 
 ; checks to see if a var declaration has a value to assign
 (define has_value? (lambda (statement) (if (null? (cddr statement)) #f #t)))
@@ -376,10 +387,10 @@
     (vprintf "var_exists? called with var: ~s and state: ~s\n" var state)
     (cond 
       ((null? (vars state)) #f)
-      ((list? (first_var_name state)) (or (var_exists? var (first_item state)) 
-                                      (var_exists? var (next_item state))))
-      ((equal? var (first_var_name state)) #t)
-      (else (var_exists? var (cons (other_vars state) (next_item state)))))))
+      ((list? (first_var state)) (or (var_exists? var (top_state state)) 
+                                      (var_exists? var (remain_state state))))
+      ((equal? var (first_var state)) #t)
+      (else (var_exists? var (remain_state state))))))
 
 ; Checks if a variable has been initialized with a value
 ; Returns true if it has been initialized, false otherwise
@@ -387,11 +398,12 @@
   (lambda (var state)
     (vprintf "var_init? called with var: ~s and state: ~s\n" var state)
     (cond
-      ((list? (first_var_name state)) (or (var_init? var (first_item state)) 
-                                (var_init? var (next_item state))))
+      ((null? (vars state)) #f)
+      ((list? (first_var state)) (or (var_init? var (top_state state)) 
+                                      (var_init? var (remain_state state))))
       ((eq? #f (var_exists? var state)) #f)
       ((null? (next_item state)) #f)
-      ((equal? var (first_var_name state)) (not (null? (values state))))
+      ((equal? var (first_var state)) (not (null? (values state))))
       (else (var_init? var (cons (other_vars state) (list (other_values state))))))))
 
 ; Helper for find_var, checks if var has been intialized
@@ -401,6 +413,18 @@
     (cond
       ((eq? value 'null) (error "Variable not initialized"))
       (else value))))
+
+; Generates state for first block in state
+(define top_state
+  (lambda (state)
+    (vprintf "top_state called with state: ~s\n" state)
+    (cons (first_var state) (list (first_value state)))))
+
+; Generates state for excluding first block in state
+(define remain_state
+  (lambda (state)
+    (vprintf "remain_state called with state: ~s\n" state)
+    (cons (other_vars state) (list (other_values state)))))
 
 
 ;=====================================================================================================
@@ -431,9 +455,20 @@
 ; Abstraction for state logic
 (define vars car)
 (define values cadr)
-(define first_var_name caar)
+(define first_var caar)
 (define first_value caadr)
 (define other_vars cdar)
 (define other_values cdadr)
 (define next_item cdr)
 (define first_item car)
+
+; The state of the interpreter. Starts empty
+; Format (var_list val_list)
+(define init_state '(() ()))
+
+; Standard defaults for return, break, continue, and throw
+(define d_return (lambda (v) v))
+(define d_next "none_next")
+(define d_break "none_break")
+(define d_continue "none_continue")
+(define d_throw "none_throw")
