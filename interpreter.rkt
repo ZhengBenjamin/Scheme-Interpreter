@@ -52,33 +52,35 @@
   (lambda (statement state return next break continue throw)
     (vprintf "M_state called, statement: ~s, state: ~s, next: ~s, break: ~s, continue: ~s, throw: ~s\n" statement state next break continue throw)
     (cond
-      ((null? statement) (return state))
+      ((null? statement) state)
 
-      ((list? (function statement)) 
+      ((eq? (function statement) 'return)
+        (return (M_return (return_val statement) state)))
+
+      ((list? (function statement))
         (M_state (function statement) state
-          (lambda (v1) 
-            (M_state (stmt_list statement) v1 return next break continue throw)) 
-            next break continue throw))
-
-      ((eq? (function statement) 'begin) 
+                (lambda (v1)
+                  (M_state (stmt_list statement) v1 return next break continue throw))
+                    next break continue throw))
+      
+      ((eq? (function statement) 'begin)
         (M_state (stmt_list statement) (add_nested_state state)
-          (lambda (v1)
-            (return (remove_nested_state v1))) next break continue throw))
-
+                (lambda (v1)
+                  (return (remove_nested_state v1))) next break continue throw))
+      
       ((eq? (function statement) 'var)
-        (return (M_declare statement state)))
+        (M_state (stmt_list statement) (M_declare statement state) return next break continue throw))
 
-      ((eq? (function statement) '=) 
-        (return (M_assign statement state)))
+      ((eq? (function statement) '=)
+        (M_state (stmt_list statement) (M_assign statement state) return next break continue throw))
 
-      ((eq? (function statement) 'while) 
-        (return (M_while (condition statement) (body statement) state return next break continue throw)))
+      ((eq? (function statement) 'while)
+        (M_state (stmt_list statement)
+                  (M_while (condition statement) (body statement)
+                  state return next break continue throw) return next break continue throw))
 
-      ((eq? (function statement) 'if) 
-        (return (M_if statement state)))
-
-      ((eq? (function statement) 'return) 
-        (M_return (return_val statement) state))
+      ((eq? (function statement) 'if)
+        (M_state (stmt_list statement) (M_if statement state) return next break continue throw))
 
       (else (error (format "Invalid statement: ~s" statement))))))
 
