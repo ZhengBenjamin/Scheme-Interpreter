@@ -16,7 +16,7 @@
 ;; Used for debugging, set verbose to #t to see print statements
 ;=====================================================================================================
 ; Verbose flag to control print statements
-(define verbose #t)
+(define verbose #f)
 
 ; Helper function for conditional printing
 (define (vprintf fmt . args)
@@ -52,60 +52,86 @@
   (lambda (statement state return next break continue throw)
     (vprintf "M_state called, statement: ~s, state: ~s, next: ~s, break: ~s, continue: ~s, throw: ~s\n" statement state next break continue throw)
     (cond
-      ((null? statement) (return state))
+      ((null? statement) (next state))
+      
+      ; ((list? (function statement))
+      ;   (M_state (function statement) state
+      ;     (lambda (v1)
+      ;       (M_state (stmt_list statement) v1 return next break continue throw))
+      ;       next break continue throw))
+      ((list? (function statement)) (M_state
+                                     (function statement) state return (lambda (v)
+                                                                         (M_state (stmt_list statement) v return next break continue throw))
+                                     break continue throw))
+      
+      ((eq? (function statement) 'begin)
+       (M_state (stmt_list statement) (add_nested_state state)
+                return next break continue throw))
+      
+      ((eq? (function statement) 'var) (next (M_declare
+                                              statement
+                                              state)))
+      ((eq? (function statement) '=) (next (M_assign
+                                           statement
+                                           state)))
+      ((eq? (function statement) 'while) (M_while 
+                                          (condition statement) 
+                                          (body statement) 
+                                          state return next break continue throw))
+      ((eq? (function statement) 'if) (M_if statement state return next break continue throw))
+      ((eq? (function statement) 'return) (return (M_return
+                                                   (return_val statement)
+                                                   state)))
+      ; ((eq? (function statement) 'var)
+      ;   (return (M_declare statement state)))
 
-      ((list? (function statement)) 
-        (M_state (function statement) state
-          (lambda (v1) 
-            (M_state (stmt_list statement) v1 return next break continue throw)) 
-            next break continue throw))
+      ; ((eq? (function statement) '=) 
+      ;   (return (M_assign statement state)))
 
-      ((eq? (function statement) 'begin) 
-        (M_state (stmt_list statement) (add_nested_state state)
-          (lambda (v1)
-            (return (remove_nested_state v1))) next break continue throw))
+      ; ((eq? (function statement) 'while) 
+      ;   (return (M_while (condition statement) (body statement) state return next break continue throw)))
 
-      ((eq? (function statement) 'var)
-        (return (M_declare statement state)))
+      ; ((eq? (function statement) 'if) 
+      ;   (return (M_if statement state)))
 
-      ((eq? (function statement) '=) 
-        (return (M_assign statement state)))
-
-      ((eq? (function statement) 'while) 
-        (return (M_while (condition statement) (body statement) state return next break continue throw)))
-
-      ((eq? (function statement) 'if) 
-        (return (M_if statement state)))
-
-      ((eq? (function statement) 'return) 
-        (M_return (return_val statement) state))
+      ; ((eq? (function statement) 'return) 
+      ;   (M_return (return_val statement) state))
 
       (else (error (format "Invalid statement: ~s" statement))))))
 
 ; if statement. If condition is true,
 (define M_if
-  (lambda (statement state)
+  (lambda (statement state return next break continue throw)
     (vprintf "M_if called with statement: ~s, state: ~s\n" statement state)
     (if (M_boolean (condition statement) state)
-        (M_state (body1 statement) state d_return d_next d_break d_continue d_throw)
+        (M_state (body1 statement) state return next break continue throw)
         (if (> 4 (length statement))
-            state
-            (M_state (body2 statement) state d_return d_next d_break d_continue d_throw)))))
+            (next state)
+            (M_state (body2 statement) state return next break continue throw)))))
+; (define M_if
+;   (lambda (statement state return next break continue throw)
+;     (vprintf "M_if called with statement: ~s, state: ~s\n" statement state)
+;     (if (M_boolean (condition statement) state)
+;         (M_state (body1 statement) state return next break continue throw)
+;         (M_state (body2 statement) state return next break continue throw))))
 
 ; while statement. While condition is true
+; (define M_while
+;   (lambda (while_statement while_body state return next break continue throw)
+;     (vprintf "M_while called with cond: ~s, body: ~s, st: ~s\n"
+;              while_statement while_body state)
+;     (if (M_boolean while_statement state)
+;         (M_while while_statement while_body 
+;                  (M_state while_body state return next break continue throw)
+;                  return next break continue throw)
+;         (next state))))
 (define M_while
   (lambda (while_statement while_body state return next break continue throw)
-    (vprintf "M_while called with cond: ~s, body: ~s, st: ~s\n"
-             while_statement while_body state)
+    (vprintf "M_while called with while_statement: ~s, while_body: ~s, state: ~s\n" 
+              while_statement while_body state)
     (if (M_boolean while_statement state)
-        (M_state while_body
-                 state
-                 (lambda (new-state)
-                   (M_while while_statement while_body new-state return next break continue throw))
-                 next break continue throw)
-        ;; If condition is false, loop is done => call return continuation
-        (return state))))
-
+        (M_while while_statement while_body (M_state while_body state return (lambda (v) v) break continue throw) return next break continue throw)
+        (next state))))
 ; declare a variable
 (define M_declare
   (lambda (statement state)
@@ -348,7 +374,10 @@
 ;=====================================================================================================
 
 ; checks to see if a var declaration has a value to assign
-(define has_value? (lambda (statement) (if (null? (cddr statement)) #f #t)))
+(define has_value? 
+  (lambda (statement) 
+    (vprintf "has_value? called with statement: ~s\n" statement)
+    (if (null? (cddr statement)) #f #t)))
 
 ; Checks to see if subtraction is a unary or binary operation
 (define subtract
@@ -468,7 +497,7 @@
 
 ; Standard defaults for return, break, continue, and throw
 (define d_return (lambda (v) v))
-(define d_next "none_next")
-(define d_break "none_break")
-(define d_continue "none_continue")
-(define d_throw "none_throw")
+(define d_next (lambda (v) v))
+(define d_break (lambda (v) v))
+(define d_continue (lambda (v) v))
+(define d_throw (lambda (v) v))
