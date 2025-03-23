@@ -33,7 +33,7 @@
 ; Input: input file with code
 (define interpret
   (lambda (input)
-    (formater (M_state (parser input) init_state))))
+    (M_state (parser input) init_state d_return d_next d_break d_continue d_throw)))
 
 (define formater
   (lambda (input)
@@ -49,24 +49,21 @@
 ;=====================================================================================================
 
 (define M_state
-  (lambda (statement state)
-    (M_state_cps statement state (lambda (v) v))))
-
-(define M_state_cps
-  (lambda (statement state return)
-    (vprintf "M_state called with statement: ~s and state: ~s\n" statement state)
+  (lambda (statement state return next break continue throw)
+    (vprintf "M_state called, statement: ~s, state: ~s, next: ~s, break: ~s, continue: ~s, throw: ~s\n" statement state next break continue throw)
     (cond
       ((null? statement) (return state))
 
       ((list? (function statement)) 
-        (M_state_cps (function statement) state 
+        (M_state (function statement) state
           (lambda (v1) 
-            (M_state_cps (stmt_list statement) v1 return))))
+            (M_state (stmt_list statement) v1 return next break continue throw)) 
+            next break continue throw))
 
       ((eq? (function statement) 'begin) 
-        (M_state_cps (stmt_list statement) (add_nested_state state)
+        (M_state (stmt_list statement) (add_nested_state state)
           (lambda (v1)
-            (return (remove_nested_state v1)))))
+            (return (remove_nested_state v1))) next break continue throw))
 
       ((eq? (function statement) 'var)
         (return (M_declare statement state)))
@@ -75,13 +72,13 @@
         (return (M_assign statement state)))
 
       ((eq? (function statement) 'while) 
-        (return (M_while (condition statement) (body statement) state)))
+        (return (M_while (condition statement) (body statement) state return next break continue throw)))
 
       ((eq? (function statement) 'if) 
         (return (M_if statement state)))
 
       ((eq? (function statement) 'return) 
-        (return (M_return (return_val statement) state)))
+        (M_return (return_val statement) state))
 
       (else (error (format "Invalid statement: ~s" statement))))))
 
@@ -90,19 +87,24 @@
   (lambda (statement state)
     (vprintf "M_if called with statement: ~s, state: ~s\n" statement state)
     (if (M_boolean (condition statement) state)
-        (M_state (body1 statement) state)
+        (M_state (body1 statement) state d_return d_next d_break d_continue d_throw)
         (if (> 4 (length statement))
             state
-            (M_state (body2 statement) state)))))
+            (M_state (body2 statement) state d_return d_next d_break d_continue d_throw)))))
 
 ; while statement. While condition is true
 (define M_while
-  (lambda (while_statement while_body state)
-    (vprintf "M_while called with while_statement: ~s, while_body: ~s, state: ~s\n" 
-              while_statement while_body state)
+  (lambda (while_statement while_body state return next break continue throw)
+    (vprintf "M_while called with cond: ~s, body: ~s, st: ~s\n"
+             while_statement while_body state)
     (if (M_boolean while_statement state)
-        (M_while while_statement while_body (M_state while_body state))
-        state)))
+        (M_state while_body
+                 state
+                 (lambda (new-state)
+                   (M_while while_statement while_body new-state return next break continue throw))
+                 next break continue throw)
+        ;; If condition is false, loop is done => call return continuation
+        (return state))))
 
 ; declare a variable
 (define M_declare
@@ -202,8 +204,8 @@
 ; return statement
 (define M_return
   (lambda (statement state)
-    (vprintf "M_return called with statement: ~s and state: ~s\n" statement state)
-    (M_value statement state)))
+    (vprintf "M_return called with statement: ~s, state: ~s\n" statement state)
+    (formater (M_value statement state))))
 
 
 ;=====================================================================================================
@@ -344,9 +346,6 @@
 ;=====================================================================================================
 ;; Helper Functions
 ;=====================================================================================================
-; The state of the interpreter. Starts empty
-; Format (var_list val_list)
-(define init_state '(() ()))
 
 ; checks to see if a var declaration has a value to assign
 (define has_value? (lambda (statement) (if (null? (cddr statement)) #f #t)))
@@ -462,3 +461,14 @@
 (define other_values cdadr)
 (define next_item cdr)
 (define first_item car)
+
+; The state of the interpreter. Starts empty
+; Format (var_list val_list)
+(define init_state '(() ()))
+
+; Standard defaults for return, break, continue, and throw
+(define d_return (lambda (v) v))
+(define d_next "none_next")
+(define d_break "none_break")
+(define d_continue "none_continue")
+(define d_throw "none_throw")
