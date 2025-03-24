@@ -87,6 +87,15 @@
 
       ((eq? (function statement) 'return)
         (return (M_return (return_val statement) state)))
+
+      ((eq? (function statement) 'break)
+        (break state))
+
+      ((eq? (function statement) 'continue)
+        (continue state))
+
+      ((eq? (function statement) 'throw)
+        (throw (M_value (return_val statement) state) state))
       
       (else (error (format "Invalid statement: ~s" statement))))))
 
