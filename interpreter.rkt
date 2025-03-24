@@ -89,9 +89,44 @@
                                                    state)))
       ((eq? (function statement) 'break) (break state))
       ((eq? (function statement) 'continue) (continue state))
+      ((eq? (function statement) 'throw) (throw state (value statement)))
+      ((eq? (function statement) 'try) (M_try (stmt_list statement) 
+                                              (add_nested_state state) 
+                                              return 
+                                              (lambda (v) (next (remove_nested_state v))) 
+                                              (lambda (v) (break (remove_nested_state v))) 
+                                              (lambda (v) (continue (remove_nested_state v))) 
+                                              throw))
 
       (else (error (format "Invalid statement: ~s" statement))))))
 
+(define M_try
+  (lambda (statement state return next break continue throw)
+    (vprintf "M_try called with try_statement: ~s, state: ~s\n" statement state)
+    (vprintf "HHHHHHEEEEERRERERE cadr of statement: ~s\n" (cadr statement))
+    (M_state (tryblock statement) state return         
+             (if (not (null? (cadr statement)))
+                  (if (not (null? (caddr statement)))
+                      (lambda (v) (M_state (finallyblock statement) v return next break continue throw))
+                      next)
+                  (lambda (v) (M_state (earlyfinallyblock statement) v return next break continue throw)))
+              break continue
+              (if (not (null? (cadr statement)))
+                  (lambda (v1 v2) (M_state (catchblock statement) 
+                                           (add_catch_state v1 (car (cadadr statement)) (car v2))
+                                           return
+                                           (if (not (null? (caddr statement)))
+                                               (lambda (v) (M_state (finallyblock statement) v return next break continue throw))
+                                               next)
+                                           break continue throw))
+                  (lambda (v) (M_state (earlyfinallyblock statement) v return next break continue throw)))
+              )))
+
+(define add_catch_state
+  (lambda (state var val)
+    (vprintf "add_catch_state called with state: ~s, var: ~s, val: ~s\n" state var val)
+    (append_state var val state)))
+  
 ; if statement. If condition is true,
 (define M_if
   (lambda (statement state return next break continue throw)
@@ -470,6 +505,11 @@
 (define return_val cadr)
 (define body caddr)
 (define condition cadr)
+(define value cdr)
+(define tryblock car)
+(define catchblock cddadr)
+(define finallyblock cdaddr)
+(define earlyfinallyblock cdaddr)
 
 ; abstraction for if/while
 (define body1 caddr)
@@ -504,4 +544,4 @@
 (define d_next (lambda (v) v))
 (define d_break (lambda (v) v))
 (define d_continue (lambda (v) v))
-(define d_throw (lambda (v) v))
+(define d_throw (lambda (v1 v2) v1 v2))
