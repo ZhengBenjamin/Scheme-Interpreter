@@ -16,7 +16,7 @@
 ;; Used for debugging, set verbose to #t to see print statements
 ;=====================================================================================================
 ; Verbose flag to control print statements
-(define verbose #t)
+(define verbose #f)
 
 ; Helper function for conditional printing
 (define (vprintf fmt . args)
@@ -241,7 +241,6 @@
 
       ; throw: check if catch exists
       (lambda (val throw_state)
-        (printf "val: ~s" val)
         (if (not (hasCatch? catch_stmt))
 
           ; No catch > interpret finally > rethrow
@@ -534,8 +533,7 @@
 ; Abstraction for try catch
 (define try_body cadr)
 (define catch_clause caddr)
-(define finally_clause (lambda (statement) (cadr (cadddr statement))))
-
+(define finally_clause (lambda (statement) (if (null? (cadddr statement)) '() (cadr (cadddr statement)))))
 (define catch_var_name (lambda (catch_clause) (caadr catch_clause)))
 (define catch_body (lambda (catch_clause) (caddr catch_clause))) 
 
