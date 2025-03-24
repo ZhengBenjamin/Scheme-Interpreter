@@ -69,9 +69,13 @@
     (cond
 
       ((eq? (function statement) 'begin)
-        (M_state (stmt_list statement) (add_nested_state state) return
+        (M_state (stmt_list statement) 
+          (add_nested_state state) 
+          (lambda (val) (return val))
           (lambda (new_state) (next (remove_nested_state new_state)))
-        break continue throw))
+          (lambda (new_state) (break (remove_nested_state new_state)))
+          (lambda (new_state) (continue (remove_nested_state new_state)))
+          (lambda (val new_state) (throw val (remove_nested_state new_state)))))
 
       ((eq? (function statement) 'var)
         (next (M_declare statement state)))
@@ -490,6 +494,6 @@
 ; Standard defaults for return, break, continue, and throw
 (define d_return (lambda (v) v))
 (define d_next (lambda (v) v))
-(define d_break (lambda (v) v))
-(define d_continue (lambda (v) v))
-(define d_throw "none_throw")
+(define d_break (lambda (v) (error "Invalid break statement")))
+(define d_continue (lambda (v) "Invalid continue statement"))
+(define d_throw (lambda (val state) (error (format "Uncaught exception: ~s" val))))
