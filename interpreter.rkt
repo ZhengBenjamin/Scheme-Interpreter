@@ -100,6 +100,9 @@
 
       ((eq? (function statement) 'throw)
         (throw (M_value (return_val statement) state) state))
+
+      ((eq? (function statement) 'try)
+        (M_try (try_body statement) (catch_body statement) (finally_clause statement) state next return break continue throw))
       
       (else (error (format "Invalid statement: ~s" statement))))))
 
@@ -143,8 +146,6 @@
     (if (var_exists? (varname statement) state)
       (var_assn (varname statement) (M_value (varvalue statement) state) state)
       (error (format "Variable not declared: ~s" (varname statement))))))
-
-
 
 ; evaluates a mathematical expression
 (define M_value
@@ -226,6 +227,43 @@
     (vprintf "M_return called with statement: ~s, state: ~s\n" statement state)
     (formater (M_value statement state))))
 
+; try catch statement
+(define M_try
+  (lambda (main_stmt catch_stmt finally_stmt state next return break continue throw)
+    
+    (M_state main_stmt state return 
+      (lambda (after_main_state) ; next: no throw > interpret finally > then next
+        (M_state finally_stmt after_main_state return 
+          (lambda (after_finally_state) 
+            (next after_finally_state)) 
+          break continue throw))
+      break continue
+
+      ; throw: check if catch exists
+      (lambda (val throw_state)
+        (printf "val: ~s" val)
+        (if (not (hasCatch? catch_stmt))
+
+          ; No catch > interpret finally > rethrow
+          (M_state finally_stmt throw_state return
+            (lambda (state2) (throw val state2))
+            break continue
+            (lambda (val2 state3) (throw val2 state3)))
+
+          ; Catch exists > interpret catch > interpret finally > rethrow
+          (M_state (catch_body catch_stmt)
+            (add_nested_state (append_state (catch_var_name catch_stmt) val throw_state))
+            return 
+            (lambda (after_catch_state) ; next: after catch > interpret finally > then next
+              (M_state finally_stmt after_catch_state return
+                (lambda (final_state)
+                  (next (remove_nested_state final_state)))
+                break continue
+                (lambda (val2 state_re_throw)
+                  (throw val2 (remove_nested_state state_re_throw)))))
+            break continue
+            (lambda (val2 state_re_throw2)
+              (throw val2 (remove_nested_state state_re_throw2)))))))))
 
 ;=====================================================================================================
 ;; Variable Logic
@@ -452,6 +490,12 @@
       statement
       (list statement))))
 
+; Checks if try has catch statement
+(define hasCatch?
+  (lambda (catch_statement)
+    (and (pair? catch_statement) (eq? (car catch_statement) 'catch))))
+
+
 ;=====================================================================================================
 ;; Abstractions
 ;=====================================================================================================
@@ -486,6 +530,14 @@
 (define other_values cdadr)
 (define next_item cdr)
 (define first_item car)
+
+; Abstraction for try catch
+(define try_body cadr)
+(define catch_clause caddr)
+(define finally_clause (lambda (statement) (cadr (cadddr statement))))
+
+(define catch_var_name (lambda (catch_clause) (caadr catch_clause)))
+(define catch_body (lambda (catch_clause) (caddr catch_clause))) 
 
 ; The state of the interpreter. Starts empty
 ; Format (var_list val_list)
