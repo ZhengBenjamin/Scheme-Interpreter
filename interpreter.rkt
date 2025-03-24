@@ -229,40 +229,46 @@
 
 ; try catch statement
 (define M_try
-  (lambda (main_stmt catch_stmt finally_stmt state next return break continue throw)
-    
-    (M_state main_stmt state return 
-      (lambda (after_main_state) ; next: no throw > interpret finally > then next
-        (M_state finally_stmt after_main_state return 
-          (lambda (after_finally_state) 
-            (next after_finally_state)) 
-          break continue throw))
+  (lambda (main-stmt catch-stmt finally-stmt state next return break continue throw)
+    (M_state main-stmt state return
+      (lambda (after-main-state) ;next > eval main statment 
+        (M_try-normal after-main-state finally-stmt return next break continue throw))
       break continue
+      (lambda (val throw-state) ; throw > checks catch > finally
+        (if (not (hasCatch? catch-stmt))
+            ; No catch > eval finally
+            (M_try-no-catch val throw-state finally-stmt return break continue throw next)
+            ; Catch > eval catch > finally
+            (M_try-catch val throw-state catch-stmt finally-stmt return break continue throw next))))))
 
-      ; throw: check if catch exists
-      (lambda (val throw_state)
-        (if (not (hasCatch? catch_stmt))
+(define M_try-normal
+  (lambda (after-main-state finally-stmt return next break continue throw)
+    (M_state finally-stmt after-main-state return
+      (lambda (final-state) (next final-state))
+      break continue throw)))
 
-          ; No catch > interpret finally > rethrow
-          (M_state finally_stmt throw_state return
-            (lambda (state2) (throw val state2))
-            break continue
-            (lambda (val2 state3) (throw val2 state3)))
+(define M_try-no-catch
+  (lambda (val throw-state finally-stmt return break continue throw next)
+    (M_state finally-stmt throw-state return
+      (lambda (state2) (throw val state2))
+      break continue
+      (lambda (val2 state3) (throw val2 state3)))))
 
-          ; Catch exists > interpret catch > interpret finally > rethrow
-          (M_state (catch_body catch_stmt)
-            (add_nested_state (append_state (catch_var_name catch_stmt) val throw_state))
-            return 
-            (lambda (after_catch_state) ; next: after catch > interpret finally > then next
-              (M_state finally_stmt after_catch_state return
-                (lambda (final_state)
-                  (next (remove_nested_state final_state)))
-                break continue
-                (lambda (val2 state_re_throw)
-                  (throw val2 (remove_nested_state state_re_throw)))))
-            break continue
-            (lambda (val2 state_re_throw2)
-              (throw val2 (remove_nested_state state_re_throw2)))))))))
+(define M_try-catch
+  (lambda (val throw-state catch-stmt finally-stmt return break continue throw next)
+    (M_state (catch_body catch-stmt)
+      (add_nested_state (append_state (catch_var_name catch-stmt) val throw-state))
+      return
+      (lambda (after-catch-state)
+        (M_state finally-stmt after-catch-state return
+          (lambda (final-state) (next (remove_nested_state final-state)))
+          break continue
+          (lambda (val2 state-rethrow)
+            (throw val2 (remove_nested_state state-rethrow)))))
+      break continue
+      (lambda (val2 state-rethrow2)
+        (throw val2 (remove_nested_state state-rethrow2))))))
+
 
 ;=====================================================================================================
 ;; Variable Logic
@@ -533,7 +539,7 @@
 ; Abstraction for try catch
 (define try_body cadr)
 (define catch_clause caddr)
-(define finally_clause (lambda (statement) (if (null? (cadddr statement)) '() (cadr (cadddr statement)))))
+(define finally_clause (lambda (statement) (if (null? (cadddr statement)) '() (cadr (cadddr statement))))) ; gives finally clause, empty if none
 (define catch_var_name (lambda (catch_clause) (caadr catch_clause)))
 (define catch_body (lambda (catch_clause) (caddr catch_clause))) 
 
