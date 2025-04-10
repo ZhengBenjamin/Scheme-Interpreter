@@ -1,5 +1,6 @@
 #lang racket
-(require "simpleParser.rkt")
+; (require "simpleParser.rkt")
+(require "functionParser.rkt")
 (provide (all-defined-out))
 
 
