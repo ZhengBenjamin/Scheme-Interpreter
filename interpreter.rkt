@@ -1,5 +1,6 @@
 #lang racket
-(require "simpleParser.rkt")
+; (require "simpleParser.rkt")
+(require "functionParser.rkt")
 (provide (all-defined-out))
 
 
@@ -106,6 +107,33 @@
       
       (else (error (format "Invalid statement: ~s" statement))))))
 
+(define M_try
+  (lambda (statement state return next break continue throw)
+    (vprintf "M_try called with try_statement: ~s, state: ~s\n" statement state)
+    (vprintf "HHHHHHEEEEERRERERE cadr of statement: ~s\n" (cadr statement))
+    (M_state (tryblock statement) state return         
+             (if (not (null? (cadr statement)))
+                  (if (not (null? (caddr statement)))
+                      (lambda (v) (M_state (finallyblock statement) v return next break continue throw))
+                      next)
+                  (lambda (v) (M_state (earlyfinallyblock statement) v return next break continue throw)))
+              break continue
+              (if (not (null? (cadr statement)))
+                  (lambda (v1 v2) (M_state (catchblock statement) 
+                                           (add_catch_state v1 (car (cadadr statement)) (car v2))
+                                           return
+                                           (if (not (null? (caddr statement)))
+                                               (lambda (v) (M_state (finallyblock statement) v return next break continue throw))
+                                               next)
+                                           break continue throw))
+                  (lambda (v) (M_state (earlyfinallyblock statement) v return next break continue throw)))
+              )))
+
+(define add_catch_state
+  (lambda (state var val)
+    (vprintf "add_catch_state called with state: ~s, var: ~s, val: ~s\n" state var val)
+    (append_state var val state)))
+  
 ; if statement. If condition is true,
 (define M_if
   (lambda (statement state next return break continue throw)
@@ -116,7 +144,24 @@
             (next state)
             (M_state (ensure_stmt_list (body2 statement)) state return next break continue throw)))))
 
+
 ; while statement. While condition is true
+; (define M_while
+;   (lambda (while_statement while_body state return next break continue throw)
+;     (vprintf "M_while called with cond: ~s, body: ~s, st: ~s\n"
+;              while_statement while_body state)
+;     (if (M_boolean while_statement state)
+;         (M_while while_statement while_body 
+;                  (M_state while_body state return next break continue throw)
+;                  return next break continue throw)
+;         (next state))))
+; (define M_while
+;   (lambda (while_statement while_body state return next break continue throw)
+;     (vprintf "M_while called with while_statement: ~s, while_body: ~s, state: ~s\n" 
+;               while_statement while_body state)
+;     (if (M_boolean while_statement state)
+;         (M_while while_statement while_body (M_state while_body state return (lambda (v) v) break continue throw) return (lambda (v) v) break continue throw)
+;         (next state))))
 (define M_while
   (lambda (cond body state next return break continue throw)
     (vprintf "M_while called with cond: ~s, body: ~s, state: ~s\n" cond body state) 
@@ -127,7 +172,6 @@
           (lambda (new_state) (M_while cond body new_state next return break continue throw)) ;continue
           throw)
         (next state))))
-
 ; declare a variable
 (define M_declare
   (lambda (statement state)
@@ -410,7 +454,10 @@
 ;=====================================================================================================
 
 ; checks to see if a var declaration has a value to assign
-(define has_value? (lambda (statement) (if (null? (cddr statement)) #f #t)))
+(define has_value? 
+  (lambda (statement) 
+    (vprintf "has_value? called with statement: ~s\n" statement)
+    (if (null? (cddr statement)) #f #t)))
 
 ; Checks to see if subtraction is a unary or binary operation
 (define subtract
@@ -511,6 +558,11 @@
 (define return_val cadr)
 (define body caddr)
 (define condition cadr)
+(define value cdr)
+(define tryblock car)
+(define catchblock cddadr)
+(define finallyblock cdaddr)
+(define earlyfinallyblock cdaddr)
 
 ; abstraction for if/while
 (define body1 caddr)
