@@ -1,6 +1,6 @@
 #lang racket
-(require "simpleParser.rkt")
-; (require "functionParser.rkt")
+; (require "simpleParser.rkt")
+(require "functionParser.rkt")
 (provide (all-defined-out))
 
 
@@ -98,8 +98,32 @@
                                               (lambda (v) (break (remove_nested_state v))) 
                                               (lambda (v) (continue (remove_nested_state v))) 
                                               throw))
-
+      ((eq? (function statement) 'function) (next (M_function statement state return next break continue throw)))
+      ((eq? (function statement) 'funcall) (next (M_funcall statement state return next break continue throw)))
       (else (error (format "Invalid statement: ~s" statement))))))
+
+(define M_funcall
+  (lambda (statement state return next break continue throw)
+    (vprintf "M_funcall called with statement: ~s and state: ~s\n" statement state)
+    ))
+
+(define M_function
+  (lambda (statement state return next break continue throw)
+    (vprintf "M_function called with statement: ~s and state: ~s\n" statement state)
+    (cond
+      ((var_exists? (cadr statement) state) (error (format "Function already exists: ~s" (function statement))))
+      ((eq? (cadr statement) 'main) 
+       (M_state (cadddr statement) (add_nested_state state) return
+                                             (lambda (v) (next (remove_nested_state v)))
+                                             (lambda (v) (break (remove_nested_state v)))
+                                             (lambda (v) (continue (remove_nested_state v)))
+                                             throw))
+      (else (append_state (cadr statement) (create_closure (caddr statement) (cadddr statement) state) state)))))
+
+(define create_closure
+  (lambda (params body state)
+    (vprintf "create_closure called with formal parameters: ~sstatement: ~s and state: ~s\n" params body state)
+    (cons params (cons body (cons (lambda (v) v) '())))))
 
 (define M_try
   (lambda (statement state return next break continue throw)
@@ -177,7 +201,7 @@
   (lambda (statement state)
     (vprintf "M_declare called with statement: ~s and state: ~s\n" statement state)
     (cond
-      ((var_exists? (varname statement) state) (error ("Variable already exists")))
+      ;((var_exists? (varname statement) state) (error ("Variable already exists")))
       ((has_value? statement) (var_dec_assn 
                                 (varname statement) 
                                 (M_value (varvalue statement) state) state))
@@ -203,17 +227,17 @@
       ((boolean? expression) expression)
       ((number? expression) expression)
       ((var? expression) (get_var expression state))
-      ((eq? '|| (op expression)) (or 
-                                  (M_boolean (x expression) state) 
+      ((eq? '|| (op expression)) (or
+                                  (M_boolean (x expression) state)
                                   (M_boolean (y expression) state)))
-      ((eq? '&& (op expression)) (and 
-                                  (M_boolean (x expression) state) 
+      ((eq? '&& (op expression)) (and
+                                  (M_boolean (x expression) state)
                                   (M_boolean (y expression) state)))
       ((eq? '! (op expression)) (not (M_boolean (x expression) state)))
       ((eq? '== (op expression)) (eq? (M_value (x expression) state) (M_value (y expression) state)))
-      ((eq? '!= (op expression)) (not (eq? 
-                                        (M_value (x expression) state) 
-                                        (M_value (y expression) state))))
+      ((eq? '!= (op expression)) (not (eq?
+                                       (M_value (x expression) state)
+                                       (M_value (y expression) state))))
       ((eq? '> (op expression)) (> (M_value (x expression) state) (M_value (y expression) state)))
       ((eq? '< (op expression)) (< (M_value (x expression) state) (M_value (y expression) state)))
       ((eq? '>= (op expression)) (>= (M_value (x expression) state) (M_value (y expression) state)))
@@ -221,14 +245,39 @@
       ((eq? '+ (op expression)) (+ (M_value (x expression) state) (M_value (y expression) state)))
       ((eq? '- (op expression)) (subtract expression state))
       ((eq? '* (op expression)) (* (M_value (x expression) state) (M_value (y expression) state)))
-      ((eq? '/ (op expression)) (quotient 
-                                  (M_value (x expression) state) 
-                                  (M_value (y expression) state)))
-      ((eq? '% (op expression)) (remainder 
-                                  (M_value (x expression) state) 
-                                  (M_value (y expression) state)))
-
+      ((eq? '/ (op expression)) (quotient
+                                 (M_value (x expression) state)
+                                 (M_value (y expression) state)))
+      ((eq? '% (op expression)) (remainder
+                                 (M_value (x expression) state)
+                                 (M_value (y expression) state)))
+      ((eq? 'funcall (op expression)) (M_fvalue (cdr expression) state))
       (else (error "Invalid expression")))))
+
+(define M_fvalue
+  (lambda (statement state)
+    (vprintf "M_fvalue called with statement: ~s and state: ~s\n" statement state)
+    (if (var_exists? (car statement) state)
+        (M_state 
+         (cadr (find_var (car statement) state))
+         (M_fvalue_helper (cdr statement) (car (find_var (car statement) state)) state (lambda (v1 v2) (list (cons v1 (list (car state))) (cons v2 (cdr state))))) d_return d_next d_break d_continue d_throw)
+        (error (format "Function not declared: ~s" (car statement))))))
+
+
+(define M_fvalue_helper
+  (lambda (actual formal state return)
+    (vprintf "M_fvalue_helper called with actual: ~s and formal: ~s\n" actual formal)
+    (cond
+      ((and (null? actual) (not (null? formal))) (error "Mismatched parameters and arguments"))
+      ((and (null? formal) (not (null? actual))) (error "Mismatched parameters and arguments"))
+      ((null? actual) (return '() '()))
+      (else 
+       (M_fvalue_helper (cdr actual) (cdr formal) state
+                        (lambda (v1 v2) 
+                          (return (cons (car formal) v1)
+                                  (cons (box (M_value (car actual) state)) v2))))))))
+
+
 
 ; evaluates a boolean expression  ==, !=, <, >, <=. >=
 (define M_boolean
