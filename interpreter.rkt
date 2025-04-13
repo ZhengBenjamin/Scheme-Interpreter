@@ -17,7 +17,7 @@
 ;; Used for debugging, set verbose to #t to see print statements
 ;=====================================================================================================
 ; Verbose flag to control print statements
-(define verbose #t)
+(define verbose #f)
 
 ; Helper function for conditional printing
 (define (vprintf fmt . args)
@@ -84,7 +84,7 @@
           (else (next (M_function_dec (func_name statement) (arg_list statement) (func_body statement) state)))))
 
       ((eq? (function statement) 'funcall)
-        (M_function (func_name statement) (arg_list statement) state (lambda (val) (next val)) return break continue throw))
+        (M_function (func_name statement) (arg_list_closure statement) state (lambda (val) (next state)) return break continue throw))
 
       ((eq? (function statement) 'var)
         (next (M_declare statement state)))
@@ -173,7 +173,7 @@
     (vprintf "M_assign called with statement: ~s and state: ~s\n\n" statement state)
     (if (var_exists? (varname statement) state)
       (var_assn (varname statement) (M_value (varvalue statement) state) state)
-      (error (format "Variable not declared: ~s" (varname statement))))))
+      (error (format "Variable not declared or out of scope: ~s" (varname statement))))))
 
 ; evaluates a mathematical expression
 (define M_value
@@ -266,10 +266,9 @@
       ((and (list? statement) (eq? (car statement) 'funcall)) 
         (M_function 
           (func_name statement) 
-          (arg_list statement) 
+          (arg_list_closure statement) 
           state
-          (lambda (v) 
-            (formater v))
+          (lambda (v) (formater v))
           (lambda (v) v)
           d_break d_continue d_throw))
       (else (formater (M_value statement state))))))
@@ -278,7 +277,7 @@
 (define M_try
   (lambda (main-stmt catch-stmt finally-stmt state next return break continue throw)
     (M_state main-stmt state return
-      (lambda (after-main-state) ;next > eval main statment 
+      (lambda (after-main-state) ;next > eval main statement
         (M_try-normal after-main-state finally-stmt return next break continue throw))
       break continue
       (lambda (val throw-state) ; throw > checks catch > finally
@@ -503,15 +502,24 @@
 ; binding arguments to formal params 
 (define bind_parameters
   (lambda (formals actual func_state state)
-    (vprintf "bind_parameters called with formals: ~s, actual: ~s, fstate: ~s, state: ~s\n\n" 
-              formals actual func_state state)
+    (vprintf "bind_parameters called with formals: ~s, actual: ~s, fstate: ~s, state: ~s\n\n" formals actual func_state state)
     (cond 
       ((null? formals) func_state)
+      ((not (check_input_params formals actual)) (error (format "Function call parameter mismatch: ~s" actual)))
       (else (bind_parameters 
               (cdr formals)
               (cdr actual)
               (append_state (car formals) (M_value (car actual) state) func_state)
               state)))))
+
+(define check_input_params
+  (lambda (formals actual)
+    (vprintf "check_input_params called with formals: ~s, actual: ~s\n\n" formals actual)
+    (cond
+      ((and (null? formals) (null? actual) #t))
+      ((not (= (length formals) (length actual))) #f) ; check length different?
+      ((not (list? actual)) #f) ; check if expression
+      (else (check_input_params (cdr formals) (cdr actual))))))
 
 ;=====================================================================================================
 ;; Helper Functions
