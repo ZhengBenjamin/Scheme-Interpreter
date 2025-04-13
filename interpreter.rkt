@@ -132,14 +132,10 @@
 (define M_function
   (lambda (name params state next return break continue throw)
     (vprintf "M_function called with name: ~s, params: ~s, state: ~s\n\n" name params state)
-    (cond
-      ((not (check_func_exists? name state)) (error (format "Function not found: ~s" name)))
-      (else 
-        (M_state (closure_body (find_closure name (closure_list state)))
-          (bind_parameters (closure_params (find_closure name (closure_list state)))
-            (ensure_param_list params) (add_nested_state ((closure_env (find_closure name (closure_list state))) state)) state)
-          (lambda (val) (next val))
-          return break continue throw)))))
+    (if (not (check_func_exists? name state))
+      (error (format "Function not found: ~s" name))
+      (apply-closure (find_closure name (closure_list state))
+        params state next return break continue throw))))
 
 ; if statement. If condition is true,
 (define M_if
@@ -168,10 +164,7 @@
   (lambda (statement state)
     (vprintf "M_declare called with statement: ~s and state: ~s\n\n" statement state)
     (cond
-      ((var_exists? (varname statement) state) (error ("Variable already exists")))
-      ((has_value? statement) (var_dec_assn 
-                                (varname statement) 
-                                (M_value (varvalue statement) state) state))
+      ((has_value? statement) (var_dec_assn (varname statement) (M_value (varvalue statement) state) state))
       (else (var_dec (varname statement) state)))))
 
 ; assigns a value to a variable
@@ -257,6 +250,11 @@
                                   (M_boolean (x expression) state) 
                                   (M_boolean (y expression) state)))
       ((eq? '! (op expression)) (not (M_boolean (x expression) state)))
+
+      ((eq? 'funcall (function expression))
+        (M_function (func_name expression) 
+            (arg_list_closure expression) state d_return d_next d_break d_continue d_throw))
+
       (else (error "invalid boolean expression"))
       )))
 
@@ -293,7 +291,7 @@
 (define M_try-normal
   (lambda (after-main-state finally-stmt return next break continue throw)
     (M_state finally-stmt after-main-state return
-      (lambda (final-state) (next final-state ))
+      (lambda (final_state) (next final_state ))
       break continue throw)))
 
 (define M_try-no-catch
@@ -310,7 +308,7 @@
       return
       (lambda (after-catch-state)
         (M_state finally-stmt after-catch-state return
-          (lambda (final-state) (next (remove_nested_state final-state)))
+          (lambda (final_state) (next (remove_nested_state final_state)))
           break continue
           (lambda (val2 state-rethrow)
             (throw val2 (remove_nested_state state-rethrow)))))
@@ -469,14 +467,13 @@
 ;; Function Closure and Environment 
 ;=====================================================================================================
 
-; adds closure tuple (name args body) to 
+; adds closure tuple to state
 (define add_closure
   (lambda (name args body state)
-    (list (vars state) 
-          (values state) 
-          (cons (list name args body 
-                (lambda (curr_state) (take-right curr_state (length state)))) ; func to create env
-                (closure_list state)))))
+    (final_state ; replace temp closure with final closure (3) 
+      (temp_state state name args body) ; makes temp state with placeholder in closure list (2)
+      (make_final_closure name args body ; create new environment to replace placeholder (1)
+        (temp_state state name args body))))) 
 
 ; check if function exists in state
 (define check_func_exists?
@@ -619,6 +616,42 @@
   (lambda (catch_statement)
     (and (pair? catch_statement) (eq? (car catch_statement) 'catch))))
 
+; Rebuild state with new closure list
+(define update_state
+  (lambda (state new-closure-list)
+    (list (vars state) (values state) new-closure-list)))
+
+; Make environment for closure
+(define make_closure_env
+  (lambda (st)
+    (list (vars st) (values st) (closure_list st))))
+
+; Uses temp state to update closure env
+(define make_final_closure
+  (lambda (name args body st)
+    (list name args body (make_closure_env st))))
+
+; Replace temp closure with final closure in state
+(define final_state
+  (lambda (st finalClosure)
+    (list (vars st) (values st) 
+          (cons finalClosure (cdr (closure_list st))))))
+
+; Create temp state, cons closure placeholder onto current closure list
+(define temp_state
+  (lambda (state name args body)
+    (update_state state (cons (list name args body #f) (closure_list state)))))
+
+; Makes merged nested environment for closure
+(define apply-closure
+  (lambda (closure params state next return break continue throw)
+    (M_state (closure_body closure)
+      (bind_parameters (closure_params closure)
+        (ensure_param_list params)
+        (add_nested_state (list (vars (closure_env closure)) (values (closure_env closure)) (closure_list state))) 
+        state)
+      (lambda (val) (next val)) 
+      return break continue throw)))
 
 ;=====================================================================================================
 ;; Abstractions
