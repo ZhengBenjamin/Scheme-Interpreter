@@ -17,7 +17,7 @@
 ;; Used for debugging, set verbose to #t to see print statements
 ;=====================================================================================================
 ; Verbose flag to control print statements
-(define verbose #t)
+(define verbose #f)
 
 ; Helper function for conditional printing
 (define (vprintf fmt . args)
