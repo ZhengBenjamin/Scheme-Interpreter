@@ -34,7 +34,7 @@
 ; Input: input file with code
 (define interpret
   (lambda (input)
-    (M_state (parser input) init_state init_closure d_return d_next d_break d_continue d_throw)))
+    (M_state (parser input) init_state d_return d_next d_break d_continue d_throw)))
 
 (define formater
   (lambda (input)
@@ -50,21 +50,21 @@
 ;=====================================================================================================
 
 (define M_state
-  (lambda (statements state closure return next break continue throw)
-    (vprintf "M_state called, statements: ~s, state: ~s, closure: ~s\n" statements state closure)
+  (lambda (statements state return next break continue throw)
+    (vprintf "M_state called, statements: ~s, state: ~s, \n" statements state )
     
     (cond
       ; Base case no statements, next continuation
-      ((null? statements) (next state closure))
+      ((null? statements) (next state))
 
       ; Else execute first statemnet, then call M_state on the rest
-      (else (M_exec (function statements) state closure
-              (lambda (new_state new_closure)
-                (M_state (stmt_list statements) new_state new_closure return next break continue throw))
+      (else (M_exec (function statements) state
+              (lambda (new_state)
+                (M_state (stmt_list statements) new_state return next break continue throw))
             return break continue throw)))))
 
 (define M_exec
-  (lambda (statement state closure next return break continue throw)
+  (lambda (statement state next return break continue throw)
     (vprintf "M_exec called with statement: ~s, state: ~s\n" statement state )
 
     (cond
@@ -72,35 +72,34 @@
       ((eq? (function statement) 'begin)
         (M_state (stmt_list statement) 
           (add_nested_state state) 
-          closure
           (lambda (val) (return val))
-          (lambda (new_state new_closure) (next (remove_nested_state new_state) new_closure))
+          (lambda (new_state) (next (remove_nested_state new_state)))
           (lambda (new_state) (break (remove_nested_state new_state)))
           (lambda (new_state) (continue (remove_nested_state new_state)))
           (lambda (val new_state) (throw val (remove_nested_state new_state)))))
       
       ((eq? (function statement) 'function)
         (cond
-          ((eq? (func_name statement) 'main) (M_state (func_body statement) state closure return next break continue throw)) ; if main func, execute 
-          (else (next state (M_function_dec (func_name statement) (arg_list statement) (func_body statement) closure)))))
+          ((eq? (func_name statement) 'main) (M_state (func_body statement) state return next break continue throw)) ; if main func, execute 
+          (else (next (M_function_dec (func_name statement) (arg_list statement) (func_body statement) state)))))
 
       ((eq? (function statement) 'funcall)
-        (M_function (func_name statement) (func_params statement) state closure next return break continue throw))
+        (M_function (func_name statement) (arg_list statement) state (lambda (val) (next state)) return break continue throw))
 
       ((eq? (function statement) 'var)
-        (next (M_declare statement state) closure))
+        (next (M_declare statement state)))
 
       ((eq? (function statement) '=)
-        (next (M_assign statement state) closure))
+        (next (M_assign statement state)))
 
       ((eq? (function statement) 'while)
-        (M_while (condition statement) (ensure_stmt_list (body statement)) state closure next return break continue throw))
+        (M_while (condition statement) (ensure_stmt_list (body statement)) state next return break continue throw))
 
       ((eq? (function statement) 'if)
-        (M_if statement state closure next return break continue throw))
+        (M_if statement state next return break continue throw))
 
       ((eq? (function statement) 'return)
-        (return (M_return (return_val statement) state closure)))
+        (return (M_return (return_val statement) state)))
 
       ((eq? (function statement) 'break)
         (break state))
@@ -123,46 +122,46 @@
 
 ; declare function
 (define M_function_dec
-  (lambda (name args body closure)
-    (vprintf "M_function_dec called with name: ~s, args: ~s, body: ~s, closure: ~s\n" name args body closure)
-    (if (not (check_func_exists? name closure))
-        (add_closure name args body closure)
-        (error (format "Function already exists: ~s" name)))))
+  (lambda (name args body state)
+    (vprintf "M_function_dec called with name: ~s, args: ~s, body: ~s\n" name args body)
+      (if (not (check_func_exists? name state))
+        (add_closure name args body state)
+        (error (format "Function already declared: ~s" name)))))
 
 ; function call
 (define M_function
-  (lambda (name params state closure next return break continue throw)
-    (vprintf "M_function called with name: ~s, params: ~s, state: ~s, closure: ~s\n" name params state closure)
+  (lambda (name params state next return break continue throw)
+    (vprintf "M_function called with name: ~s, params: ~s, state: ~s\n" name params state)
     (cond
-      ((not (check_func_exists? name closure)) (error (format "Function does not exists: ~s" name)))
-      ((not (check_input_params name (ensure_stmt_list params) closure)) (error (format "Function parameter mismatch: ~s" name)))
+      ((not (check_func_exists? name state)) (error (format "Function not found: ~s" name)))
       (else 
-        (next (M_state (get_func_body name closure) 
-                        (set_func_bindings name params closure state)
-                        closure return next break continue throw) closure)))))
-
+        (M_state (closure_body (find_closure name (closure_list state)))
+          (bind_parameters (closure_params (find_closure name (closure_list state)))
+            params (add_nested_state ((closure_env (find_closure name (closure_list state))) state)) state)
+          (lambda (val) (next val))
+          return break continue throw)))))
 
 ; if statement. If condition is true,
 (define M_if
-  (lambda (statement state closure next return break continue throw)
+  (lambda (statement state next return break continue throw)
     (vprintf "M_if called with statement: ~s, state: ~s\n" statement state)
     (if (M_boolean (condition statement) state)
-        (M_state (ensure_stmt_list (body1 statement)) state closure return next break continue throw)
+        (M_state (ensure_stmt_list (body1 statement)) state return next break continue throw)
         (if (> 4 (length statement))
-            (next state closure)
-            (M_state (ensure_stmt_list (body2 statement)) state closure return next break continue throw)))))
+            (next state )
+            (M_state (ensure_stmt_list (body2 statement)) state return next break continue throw)))))
 
 ; while statement. While condition is true
 (define M_while
-  (lambda (cond body state closure next return break continue throw)
+  (lambda (cond body state next return break continue throw)
     (vprintf "M_while called with cond: ~s, body: ~s, state: ~s\n" cond body state) 
       (if (M_boolean cond state)
-        (M_state body state closure return
-          (lambda (new_state new_closure) (M_while cond body new_state new_closure next return break continue throw)) ; next
-          (lambda (new_state) (next new_state closure)) ; break
-          (lambda (new_state) (M_while cond body new_state closure next return break continue throw)) ;continue
+        (M_state body state return
+          (lambda (new_state) (M_while cond body new_state next return break continue throw)) ; next
+          (lambda (new_state) (next new_state)) ; break
+          (lambda (new_state) (M_while cond body new_state next return break continue throw)) ;continue
           throw)
-        (next state closure))))
+        (next state))))
 
 ; declare a variable
 (define M_declare
@@ -218,6 +217,10 @@
                                   (M_value (x expression) state) 
                                   (M_value (y expression) state)))
 
+      ((eq? 'funcall (function expression)) 
+      (M_function (func_name expression) 
+          (arg_list expression) state d_return d_next d_break d_continue d_throw))
+
       (else (error "Invalid expression")))))
 
 ; evaluates a boolean expression  ==, !=, <, >, <=. >=
@@ -259,16 +262,16 @@
 
 ; return statement
 (define M_return
-  (lambda (statement state closure)
+  (lambda (statement state)
     (vprintf "M_return called with statement: ~s, state: ~s\n" statement state)
     (cond
       ((and (list? statement) (eq? (car statement) 'funcall)) 
         (M_function 
           (func_name statement) 
-          (func_params statement) 
-          state closure 
-          (lambda (new_state new_closure) 
-            (formater (M_value statement new_state)))
+          (arg_list statement) 
+          state
+          (lambda (v) 
+            (formater v))
           (lambda (v) v)
           d_break d_continue d_throw))
       (else (formater (M_value statement state))))))
@@ -345,21 +348,28 @@
 ; Adds a nested state
 (define add_nested_state
   (lambda (state)
-    ; (vprintf "add_nested_state called with state: ~s\n" state)
-    (cons (cons '() (vars state)) (list (cons '() (values state))))))
+    (list
+      (cons '() (vars state)) 
+      (cons '() (values state)) 
+      (closure_list state)))) 
+
 
 ; Removes a nested state
 (define remove_nested_state
   (lambda (state)
-    ; (vprintf "remove_nested_state called with state: ~s\n" state)
-    (cons (cdar state) (list (cdadr state)))))
+    (list
+      (cdr (vars state))
+      (cdr (values state))
+      (closure_list state)))) 
+
 
 ; Calls append_var and append_val to map val to var within state
 (define append_state
   (lambda (var val old_state)
-    ; (vprintf "append_state called with var: ~s, val: ~s and old_state: ~s\n" var val old_state)
-    (cons (append_var var (vars old_state))
-          (list (append_val val (values old_state))))))
+    (list
+      (append_var var (vars old_state))
+      (append_val val (values old_state))
+      (closure_list old_state))))
 
 ; Appends a value to the value list within state
 (define append_var
@@ -382,8 +392,10 @@
 ; Sets binding of var to val in the state
 (define remove_binding
   (lambda (var state)
-    ; (vprintf "remove_binding called with var: ~s and state: ~s\n" var state)
-    (list (vars state) (find_replace_val var (vars state) (values state)))))
+    (list
+      (vars state)
+      (find_replace_val var (vars state) (values state))
+      (closure_list state))))
 
 ; Helper for remove_binding, finds var and replace its val with null
 (define find_replace_val
@@ -402,8 +414,10 @@
 ; Sets binding of var to val in the state
 (define add_binding
   (lambda (var val state)
-    ; (vprintf "add_binding called with var: ~s, val: ~s, state: ~s\n" var val state)
-    (list (vars state) (find_set_val var val (vars state) (values state)))))
+    (list
+      (vars state)
+      (find_set_val var val (vars state) (values state))
+      (closure_list state))))
 
 ; Helper for add_binding, finds var and replace its val with new val
 (define find_set_val
@@ -455,64 +469,52 @@
 ;; Function Closure and Environment 
 ;=====================================================================================================
 
+; adds closure tuple (name args body) to 
 (define add_closure
-  (lambda (name args body closure)
-    (cons (list name args body) closure)))
+  (lambda (name args body state)
+    (list (vars state) 
+          (values state) 
+          (cons (list name args body 
+                (lambda (curr_state) (take-right curr_state (length state)))) ; func to create env
+                (closure_list state)))))
 
+; check if function exists in state
 (define check_func_exists?
-  (lambda (func_name closure)
-    (vprintf "check_func_exists? called with func_name: ~s and closure: ~s\n" func_name closure)
-    (cond
-      ((null? closure) #f)
-      ((equal? func_name (first_func_name closure)) #t)
-      (else (check_func_exists? func_name (next_item closure))))))
-
-(define get_func_args
-  (lambda (func_name closure)
+  (lambda (name state)
+    (vprintf "check_func_exists? called with name: ~s and state: ~s\n" name state) 
     (cond 
-      ((null? closure) (error (format "Function not found: ~s" func_name)))
-      ((equal? func_name (first_func_name closure)) (first_arg_list closure))
-      (else (get_func_args func_name (next_item closure))))))
+      ((null? (closure_list state)) #f)
+      (else (search_closure_list name (closure_list state))))))
 
-(define get_func_body
-  (lambda (func_name closure)
+; helper for check_func_exists
+(define search_closure_list
+  (lambda (name closure_list)
+    (vprintf "search_closure_list called with name: ~s and closure_list: ~s\n" name closure_list)
     (cond 
-      ((null? closure) (error (format "Function not found: ~s" func_name)))
-      ((equal? func_name (first_func_name closure)) (first_func_body closure))
-      (else (get_func_body func_name (next_item closure))))))
+      ((null? closure_list) #f)
+      ((equal? name (closure_name (first_item closure_list))) #t)
+      (else (search_closure_list name (next_item closure_list))))))
 
-(define check_input_params
-  (lambda (func_name func_params closure)
-    (vprintf "check_input_params called with func_name: ~s, func_params: ~s, closure: ~s\n" func_name func_params closure)
+; find closure 
+(define find_closure
+  (lambda (name closure_list)
     (cond 
-      ((not (eq? (length (get_func_args func_name closure)) (length func_params))) #f)
-      (else (check_input_types func_params)))))
+      ((null? closure_list) (error (format "Function not found: ~s" name)))
+      ((equal? name (closure_name (first_item closure_list))) (first_item closure_list))
+      (else (find_closure name (next_item closure_list))))))
 
-(define check_input_types
-  (lambda (func_params)
-    (cond
-      ((null? func_params) #t)
-      ((var? (car func_params)) (check_input_types (cdr func_params)))
-      ((eq? (car func_params) 'true) (check_input_types (cdr func_params)))
-      ((eq? (car func_params) 'false) (check_input_types (cdr func_params)))
-      ((number? (car func_params)) (check_input_types (cdr func_params)))
-      (else #f))))
-
-(define set_func_bindings
-  (lambda (func_name func_params closure state)
-    (vprintf "set_func_bindings called with func_name: ~s, func_params: ~s, state: ~s\n" func_name func_params state)
-    (cond
-      ((not (check_func_exists? func_name closure)) (error (format "Function not found: ~s" func_name)))
-      ((not (check_input_params func_name (ensure_stmt_list func_params) closure)) (error (format "Function parameter mismatch: ~s" func_name)))
-      (else 
-        (add_nested_state state)
-        (set_indiv_func_bindings (get_func_args func_name closure) (ensure_stmt_list func_params) state)))))
-
-(define set_indiv_func_bindings
-  (lambda (func_args func_params state)
-    (cond
-      ((null? func_args) state)
-      (else (append_state (car func_args) (car func_params) (set_indiv_func_bindings (cdr func_args) (cdr func_params) state))))))
+; binding arguments to formal params 
+(define bind_parameters
+  (lambda (formals actual func_state state)
+    (vprintf "bind_parameters called with formals: ~s, actual: ~s, fstate: ~s, state: ~s\n" 
+              formals actual func_state state)
+    (cond 
+      ((null? formals) func_state)
+      (else (bind_parameters 
+              (cdr formals)
+              (cdr (ensure_stmt_list actual))
+              (append_state (car formals) (M_value (car (ensure_stmt_list actual)) state) func_state)
+              state)))))
 
 ;=====================================================================================================
 ;; Helper Functions
@@ -630,10 +632,15 @@
 (define finallyblock cdaddr)
 (define earlyfinallyblock cdaddr)
 
-; abstraction for functions
+; abstraction for function parts given closure tuple
+(define closure_name car)
+(define closure_params cadr)
+(define closure_body caddr)
+(define closure_env cadddr)
+
+; abstraction from function statement 
 (define func_name cadr)
 (define arg_list caddr)
-(define func_params caddr)
 (define func_body cadddr)
 
 ; abstraction for if/while
@@ -659,11 +666,7 @@
 (define other_values cdadr)
 (define next_item cdr)
 (define first_item car)
-
-; Abstraction for closure logic 
-(define first_func_name caar)
-(define first_arg_list cadar)
-(define first_func_body caddar)
+(define closure_list caddr)
 
 ; Abstraction for try catch
 (define try_body cadr)
@@ -673,15 +676,12 @@
 (define catch_body (lambda (catch_clause) (caddr catch_clause))) 
 
 ; The state of the interpreter. Starts empty
-; Format (var_list val_list)
-(define init_state '(() ()))
-
-; Closure list. Starts empty
-(define init_closure '())
+; Format (var_list val_list closure_tuples)
+(define init_state '(() () ()))
 
 ; Standard defaults for return, break, continue, and throw
 (define d_return (lambda (v) v))
-(define d_next (lambda (new_state new_closure) new_state new_closure))
+(define d_next (lambda (new_state) new_state))
 (define d_break (lambda (v) (error "Invalid break statement")))
 (define d_continue (lambda (v) "Invalid continue statement"))
 (define d_throw (lambda (val state) (error (format "Uncaught exception: ~s" val))))
