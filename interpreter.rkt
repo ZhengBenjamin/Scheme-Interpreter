@@ -17,7 +17,7 @@
 ;; Used for debugging, set verbose to #t to see print statements
 ;=====================================================================================================
 ; Verbose flag to control print statements
-(define verbose #f)
+(define verbose #t)
 
 ; Helper function for conditional printing
 (define (vprintf fmt . args)
@@ -327,6 +327,7 @@
                                   (M_boolean (x expression) state) 
                                   (M_boolean (y expression) state)))
       ((eq? '! (op expression)) (not (M_boolean (x expression) state)))
+      ((eq? 'funcall (op expression)) (M_fvalue (cdr expression) state))
       (else (error "invalid boolean expression"))
       )))
 
