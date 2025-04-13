@@ -377,7 +377,7 @@
                                           (find_var var (top_state state))
                                           (find_var var (remain_state state))))
       ((eq? var (first_var state)) (find_var_helper (unbox (first_value state))))
-      (else (get_var var (remain_state state)))))) ; I think get_var should be find_var here, should work either way, but get_var adds more calls to the stack
+      (else (find_var var (remain_state state)))))) 
 
 (define find_nested_var
   (lambda (var state)
