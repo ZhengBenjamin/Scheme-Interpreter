@@ -293,7 +293,7 @@
   (lambda (var val state)
     (vprintf "var_assn called with var: ~s, val: ~s and state: ~s\n" var val state)
     (if (var_exists? var state)
-        (add_binding var (M_value val state) (remove_binding var state)) ; not sure if remove_binding is needed with boxes, test later
+        (add_binding var (M_value val state) state)
       (error (format "Variable not declared: ~s" var)))))
 
 
@@ -336,26 +336,6 @@
       ((null? val_list) (cons (box val) val_list))
       ((list? (car val_list)) (cons (append_val val (car val_list)) (cdr val_list)))
       (else (cons (box val) val_list)))))
-
-; Sets binding of var to val in the state
-(define remove_binding
-  (lambda (var state)
-    (vprintf "remove_binding called with var: ~s and state: ~s\n" var state)
-    (list (vars state) (find_replace_val var (vars state) (values state)))))
-
-; Helper for remove_binding, finds var and replace its val with null
-(define find_replace_val
-  (lambda (var var_list val_list)
-    (vprintf "find_replace_val called with var: ~s, var_list: ~s, val_list: ~s\n" 
-              var var_list val_list)
-    (cond
-      ((null? var_list) val_list)
-      ((list? (first_item var_list)) (cons 
-                                      (find_replace_val var (first_item var_list) (first_item val_list))
-                                      (find_replace_val var (next_item var_list) (next_item val_list))))
-      ((equal? var (vars var_list)) (begin (set-box! (car val_list) null) val_list)) ; Set binding to null
-      (else (cons (vars val_list) 
-                  (find_replace_val var (next_item var_list) (next_item val_list)))))))
 
 ; Sets binding of var to val in the state
 (define add_binding
