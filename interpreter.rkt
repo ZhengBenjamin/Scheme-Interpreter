@@ -254,14 +254,28 @@
       ((eq? 'funcall (op expression)) (M_fvalue (cdr expression) state))
       (else (error "Invalid expression")))))
 
+
 (define M_fvalue
   (lambda (statement state)
     (vprintf "M_fvalue called with statement: ~s and state: ~s\n" statement state)
     (if (var_exists? (car statement) state)
-        (M_state 
+        (M_state
          (cadr (find_var (car statement) state))
-         (M_fvalue_helper (cdr statement) (car (find_var (car statement) state)) state (lambda (v1 v2) (list (cons v1 (list (car state))) (cons v2 (cdr state))))) d_return d_next d_break d_continue d_throw)
+         (M_fvalue_helper (cdr statement)
+                          (car (find_var (car statement) state))
+                          state
+                          (lambda (v1 v2) (func_layer
+                                           (car statement)
+                                           state
+                                           (lambda (v3 v4)
+                                             (list (cons v1 v3) (cons v2 v4))))))
+         d_return d_next d_break d_continue d_throw)
         (error (format "Function not declared: ~s" (car statement))))))
+
+(define list2
+  (lambda (l1 l2)
+    (vprintf "list2 called with l1: ~s and l2: ~s\n" l1 l2)
+    (list l1 l2)))
 
 
 (define M_fvalue_helper
@@ -344,6 +358,23 @@
     (if (var_exists? var state)
         (add_binding var (M_value val state) state)
       (error (format "Variable not declared: ~s" var)))))
+
+(define func_layer
+  (lambda (func state return)
+    (vprintf "func_layer called with func: ~s, and state: ~s\n" func state)
+    (if (var_exists? func state)
+        (get_layer func (vars state) (values state) (lambda (v1 v2) (return v1 v2)))
+      (error (format "Function not declared: ~s" func)))))
+
+(define get_layer
+  (lambda (func var_list val_list return)
+    (vprintf "get_layer called with func: ~s, var_list: ~s, and val_list: ~s\n" func var_list val_list)
+    (cond
+      ;((null? (car var_list)) (return '() '()))
+      ((list? (car var_list)) (if (var_exists? func (list (car var_list) (car val_list)))
+                                  (get_layer func (car var_list) (car val_list) (lambda (v1 v2) (return (cons v1 (cdr var_list)) (cons v2 (cdr val_list)))))
+                                  (return (cdr var_list) (cdr val_list))))
+      (else (return var_list val_list)))))
 
 
 ;=====================================================================================================
