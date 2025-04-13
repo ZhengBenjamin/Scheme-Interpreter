@@ -1,14 +1,7 @@
-var a = 31160;
-var b = 1476;
-if (a < b) {
-  var temp = a;
-  a = b;
-  b = temp;
+function test (a) {
+  return a;
 }
-var r = a % b;
-while (r != 0) {
-  a = b;
-  b = r;
-  r = a % b;
+
+function main() {
+  return test(1);
 }
-return b;
