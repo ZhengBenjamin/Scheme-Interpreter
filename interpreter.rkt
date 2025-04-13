@@ -1,6 +1,6 @@
 #lang racket
-; (require "simpleParser.rkt")
-(require "functionParser.rkt")
+(require "simpleParser.rkt")
+; (require "functionParser.rkt")
 (provide (all-defined-out))
 
 
@@ -293,7 +293,7 @@
   (lambda (var val state)
     (vprintf "var_assn called with var: ~s, val: ~s and state: ~s\n" var val state)
     (if (var_exists? var state)
-        (add_binding var (M_value val state) (remove_binding var state))
+        (add_binding var (M_value val state) (remove_binding var state)) ; not sure if remove_binding is needed with boxes, test later
       (error (format "Variable not declared: ~s" var)))))
 
 
@@ -331,11 +331,11 @@
 ; Appends a variable to the variable list within state
 (define append_val
   (lambda (val val_list)
-    (vprintf "append_val called with val: ~s and val_list: ~s\n" val val_list)
+    (vprintf "append_val2 called with val: ~s and val_list: ~s\n" val val_list)
     (cond
-      ((null? val_list) (cons val val_list))
+      ((null? val_list) (cons (box val) val_list))
       ((list? (car val_list)) (cons (append_val val (car val_list)) (cdr val_list)))
-      (else (cons val val_list)))))
+      (else (cons (box val) val_list)))))
 
 ; Sets binding of var to val in the state
 (define remove_binding
@@ -353,7 +353,7 @@
       ((list? (first_item var_list)) (cons 
                                       (find_replace_val var (first_item var_list) (first_item val_list))
                                       (find_replace_val var (next_item var_list) (next_item val_list))))
-      ((equal? var (vars var_list)) (cons null (cdr val_list))) ; Set binding to null
+      ((equal? var (vars var_list)) (begin (set-box! (car val_list) null) val_list)) ; Set binding to null
       (else (cons (vars val_list) 
                   (find_replace_val var (next_item var_list) (next_item val_list)))))))
 
@@ -373,7 +373,7 @@
       ((list? (first_item var_list)) (cons 
                                       (find_set_val var val (first_item var_list) (first_item val_list))
                                       (find_set_val var val (next_item var_list) (next_item val_list))))
-      ((equal? var (vars var_list)) (cons val (next_item val_list))) ; Update binding
+      ((equal? var (vars var_list)) (begin (set-box! (car val_list) val) val_list)) ; Update binding
       (else (cons (vars val_list) 
                   (find_set_val var val (next_item var_list) (next_item val_list)))))))
 
@@ -396,8 +396,8 @@
       ((list? (first_var state)) (if (find_nested_var var (top_state state))
                                           (find_var var (top_state state))
                                           (find_var var (remain_state state))))
-      ((eq? var (first_var state)) (find_var_helper (first_value state)))
-      (else (get_var var (remain_state state))))))
+      ((eq? var (first_var state)) (find_var_helper (unbox (first_value state))))
+      (else (get_var var (remain_state state)))))) ; I think get_var should be find_var here, should work either way, but get_var adds more calls to the stack
 
 (define find_nested_var
   (lambda (var state)
