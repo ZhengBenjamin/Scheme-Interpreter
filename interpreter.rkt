@@ -38,7 +38,7 @@
 
 (define formater
   (lambda (input)
-    (vprintf "Formater called with input: ~s\n" input)
+    (vprintf "Formater called with input: ~s\n\n" input)
     (cond
       ((boolean? input) (if input 'true 'false))
       (else input))))
@@ -51,7 +51,7 @@
 
 (define M_state
   (lambda (statements state return next break continue throw)
-    (vprintf "M_state called, statements: ~s, state: ~s, \n" statements state )
+    (vprintf "M_state called, statements: ~s, state: ~s, \n\n" statements state )
     
     (cond
       ; Base case no statements, next continuation
@@ -65,7 +65,7 @@
 
 (define M_exec
   (lambda (statement state next return break continue throw)
-    (vprintf "M_exec called with statement: ~s, state: ~s\n" statement state )
+    (vprintf "M_exec called with statement: ~s, state: ~s\n\n" statement state )
 
     (cond
 
@@ -84,7 +84,7 @@
           (else (next (M_function_dec (func_name statement) (arg_list statement) (func_body statement) state)))))
 
       ((eq? (function statement) 'funcall)
-        (M_function (func_name statement) (arg_list statement) state (lambda (val) (next state)) return break continue throw))
+        (M_function (func_name statement) (arg_list statement) state (lambda (val) (next val)) return break continue throw))
 
       ((eq? (function statement) 'var)
         (next (M_declare statement state)))
@@ -117,13 +117,13 @@
 
 (define add_catch_state
   (lambda (state var val)
-    (vprintf "add_catch_state called with state: ~s, var: ~s, val: ~s\n" state var val)
+    (vprintf "add_catch_state called with state: ~s, var: ~s, val: ~s\n\n" state var val)
     (append_state var val state)))
 
 ; declare function
 (define M_function_dec
   (lambda (name args body state)
-    (vprintf "M_function_dec called with name: ~s, args: ~s, body: ~s\n" name args body)
+    (vprintf "M_function_dec called with name: ~s, args: ~s, body: ~s\n\n" name args body)
       (if (not (check_func_exists? name state))
         (add_closure name args body state)
         (error (format "Function already declared: ~s" name)))))
@@ -131,20 +131,20 @@
 ; function call
 (define M_function
   (lambda (name params state next return break continue throw)
-    (vprintf "M_function called with name: ~s, params: ~s, state: ~s\n" name params state)
+    (vprintf "M_function called with name: ~s, params: ~s, state: ~s\n\n" name params state)
     (cond
       ((not (check_func_exists? name state)) (error (format "Function not found: ~s" name)))
       (else 
         (M_state (closure_body (find_closure name (closure_list state)))
           (bind_parameters (closure_params (find_closure name (closure_list state)))
-            params (add_nested_state ((closure_env (find_closure name (closure_list state))) state)) state)
+            (ensure_param_list params) (add_nested_state ((closure_env (find_closure name (closure_list state))) state)) state)
           (lambda (val) (next val))
           return break continue throw)))))
 
 ; if statement. If condition is true,
 (define M_if
   (lambda (statement state next return break continue throw)
-    (vprintf "M_if called with statement: ~s, state: ~s\n" statement state)
+    (vprintf "M_if called with statement: ~s, state: ~s\n\n" statement state)
     (if (M_boolean (condition statement) state)
         (M_state (ensure_stmt_list (body1 statement)) state return next break continue throw)
         (if (> 4 (length statement))
@@ -154,7 +154,7 @@
 ; while statement. While condition is true
 (define M_while
   (lambda (cond body state next return break continue throw)
-    (vprintf "M_while called with cond: ~s, body: ~s, state: ~s\n" cond body state) 
+    (vprintf "M_while called with cond: ~s, body: ~s, state: ~s\n\n" cond body state) 
       (if (M_boolean cond state)
         (M_state body state return
           (lambda (new_state) (M_while cond body new_state next return break continue throw)) ; next
@@ -166,7 +166,7 @@
 ; declare a variable
 (define M_declare
   (lambda (statement state)
-    (vprintf "M_declare called with statement: ~s and state: ~s\n" statement state)
+    (vprintf "M_declare called with statement: ~s and state: ~s\n\n" statement state)
     (cond
       ((var_exists? (varname statement) state) (error ("Variable already exists")))
       ((has_value? statement) (var_dec_assn 
@@ -177,7 +177,7 @@
 ; assigns a value to a variable
 (define M_assign
   (lambda (statement state)
-    (vprintf "M_assign called with statement: ~s and state: ~s\n" statement state)
+    (vprintf "M_assign called with statement: ~s and state: ~s\n\n" statement state)
     (if (var_exists? (varname statement) state)
       (var_assn (varname statement) (M_value (varvalue statement) state) state)
       (error (format "Variable not declared: ~s" (varname statement))))))
@@ -185,7 +185,7 @@
 ; evaluates a mathematical expression
 (define M_value
   (lambda (expression state )
-    (vprintf "M_value called with expression: ~s and state: ~s\n" expression state)
+    (vprintf "M_value called with expression: ~s and state: ~s\n\n" expression state)
     (cond
       ((eq? 'true expression) #t)
       ((eq? 'false expression) #f)
@@ -219,14 +219,14 @@
 
       ((eq? 'funcall (function expression)) 
       (M_function (func_name expression) 
-          (arg_list expression) state d_return d_next d_break d_continue d_throw))
+          (arg_list_closure expression) state d_return d_next d_break d_continue d_throw))
 
       (else (error "Invalid expression")))))
 
 ; evaluates a boolean expression  ==, !=, <, >, <=. >=
 (define M_boolean
   (lambda (expression state)
-    (vprintf "M_boolean called with expression: ~s and state: ~s\n" expression state)
+    (vprintf "M_boolean called with expression: ~s and state: ~s\n\n" expression state)
     (cond
       ((boolean? expression) expression)
       ((var? expression) (get_var expression state))
@@ -263,7 +263,7 @@
 ; return statement
 (define M_return
   (lambda (statement state)
-    (vprintf "M_return called with statement: ~s, state: ~s\n" statement state)
+    (vprintf "M_return called with statement: ~s, state: ~s\n\n" statement state)
     (cond
       ((and (list? statement) (eq? (car statement) 'funcall)) 
         (M_function 
@@ -325,18 +325,18 @@
 ; Variable declaration, assigns var to null 
 (define var_dec
   (lambda (var state)
-    (vprintf "var_dec called with var: ~s and state: ~s\n" var state)
+    ; (vprintf "var_dec called with var: ~s and state: ~s\n\n" var state)
     (append_state var 'null state)))
 
 ; Variable declaration with assignment, assigns var to val
 (define var_dec_assn
   (lambda (var val state)
-    (vprintf "var_dec_assn called with var: ~s, val: ~s and state: ~s\n" var val state)
+    ; (vprintf "var_dec_assn called with var: ~s, val: ~s and state: ~s\n\n" var val state)
     (append_state var val state)))
 
 (define var_assn
   (lambda (var val state)
-    (vprintf "var_assn called with var: ~s, val: ~s and state: ~s\n" var val state)
+    ; (vprintf "var_assn called with var: ~s, val: ~s and state: ~s\n\n" var val state)
     (if (var_exists? var state)
         (add_binding var (M_value val state) (remove_binding var state))
       (error (format "Variable not declared: ~s" var)))))
@@ -374,7 +374,7 @@
 ; Appends a value to the value list within state
 (define append_var
   (lambda (var var_list)
-    ; (vprintf "append_var called with var: ~s and var_list: ~s\n" var var_list)
+    ; (vprintf "append_var called with var: ~s and var_list: ~s\n\n" var var_list)
     (cond
       ((null? var_list) (cons var var_list))
       ((list? (car var_list)) (cons (append_var var (car var_list)) (cdr var_list)))
@@ -383,7 +383,7 @@
 ; Appends a variable to the variable list within state
 (define append_val
   (lambda (val val_list)
-    ; (vprintf "append_val called with val: ~s and val_list: ~s\n" val val_list)
+    ; (vprintf "append_val called with val: ~s and val_list: ~s\n\n" val val_list)
     (cond
       ((null? val_list) (cons val val_list))
       ((list? (car val_list)) (cons (append_val val (car val_list)) (cdr val_list)))
@@ -400,7 +400,7 @@
 ; Helper for remove_binding, finds var and replace its val with null
 (define find_replace_val
   (lambda (var var_list val_list)
-    ; (vprintf "find_replace_val called with var: ~s, var_list: ~s, val_list: ~s\n" 
+    ; (vprintf "find_replace_val called with var: ~s, var_list: ~s, val_list: ~s\n\n" 
               ; var var_list val_list)
     (cond
       ((null? var_list) val_list)
@@ -422,7 +422,7 @@
 ; Helper for add_binding, finds var and replace its val with new val
 (define find_set_val
   (lambda (var val var_list val_list)
-    ; (vprintf "find_set_val called with var: ~s, val: ~s, var_list: ~s, val_list: ~s\n" 
+    ; (vprintf "find_set_val called with var: ~s, val: ~s, var_list: ~s, val_list: ~s\n\n" 
               ; var val var_list val_list)
     (cond
       ((null? var_list) val_list) ;
@@ -436,7 +436,7 @@
 ; Gets the value of a variable in the state
 (define get_var
   (lambda (var state)
-    ; (vprintf "get_var called with var: ~s and state: ~s\n" var state)
+    ; (vprintf "get_var called with var: ~s and state: ~s\n\n" var state)
     (cond
       ((not (var_exists? var state)) (error (format "Variable not declared: ~s" var)))
       ((var_init? var state) (find_var var state))
@@ -445,7 +445,7 @@
 ; Helper for get_var, finds var and returns its value
 (define find_var
   (lambda (var state)
-    ; (vprintf "find_var called with var: ~s and state: ~s\n" var state)  
+    ; (vprintf "find_var called with var: ~s and state: ~s\n\n" var state)  
     (cond
       ((or (null? (vars state)) (null? (values state))) (error 
                                                           (format "Variable not in state: ~s" var)))
@@ -457,7 +457,7 @@
 
 (define find_nested_var
   (lambda (var state)
-    ; (vprintf "find_nested_var called with var: ~s and state: ~s\n" var state)
+    ; (vprintf "find_nested_var called with var: ~s and state: ~s\n\n" var state)
     (cond
       ((null? (vars state)) #f)
       ((list? (first_var state)) (or (find_nested_var var (top_state state)) 
@@ -481,7 +481,7 @@
 ; check if function exists in state
 (define check_func_exists?
   (lambda (name state)
-    (vprintf "check_func_exists? called with name: ~s and state: ~s\n" name state) 
+    ; (vprintf "check_func_exists? called with name: ~s and state: ~s\n\n" name state) 
     (cond 
       ((null? (closure_list state)) #f)
       (else (search_closure_list name (closure_list state))))))
@@ -489,7 +489,7 @@
 ; helper for check_func_exists
 (define search_closure_list
   (lambda (name closure_list)
-    (vprintf "search_closure_list called with name: ~s and closure_list: ~s\n" name closure_list)
+    (vprintf "search_closure_list called with name: ~s and closure_list: ~s\n\n" name closure_list)
     (cond 
       ((null? closure_list) #f)
       ((equal? name (closure_name (first_item closure_list))) #t)
@@ -506,14 +506,14 @@
 ; binding arguments to formal params 
 (define bind_parameters
   (lambda (formals actual func_state state)
-    (vprintf "bind_parameters called with formals: ~s, actual: ~s, fstate: ~s, state: ~s\n" 
+    (vprintf "bind_parameters called with formals: ~s, actual: ~s, fstate: ~s, state: ~s\n\n" 
               formals actual func_state state)
     (cond 
       ((null? formals) func_state)
       (else (bind_parameters 
               (cdr formals)
-              (cdr (ensure_stmt_list actual))
-              (append_state (car formals) (M_value (car (ensure_stmt_list actual)) state) func_state)
+              (cdr actual)
+              (append_state (car formals) (M_value (car actual) state) func_state)
               state)))))
 
 ;=====================================================================================================
@@ -523,13 +523,13 @@
 ; checks to see if a var declaration has a value to assign
 (define has_value? 
   (lambda (statement) 
-    (vprintf "has_value? called with statement: ~s\n" statement)
+    ; (vprintf "has_value? called with statement: ~s\n\n" statement)
     (if (null? (cddr statement)) #f #t)))
 
 ; Checks to see if subtraction is a unary or binary operation
 (define subtract
   (lambda (expression state)
-    ; (vprintf "subtract called with expression: ~s and state: ~s\n" expression state)
+    ; (vprintf "subtract called with expression: ~s and state: ~s\n\n" expression state)
     (cond 
       ((null? (unary expression)) (- (M_value (x expression) state)))
       (else (- (M_value (x expression) state) (M_value (y expression) state))))))
@@ -537,13 +537,13 @@
 ; Checks to see if a atom could be variable
 (define var?
   (lambda (x)
-    ; (vprintf "var? called with x: ~s\n" x)
+    ; (vprintf "var? called with x: ~s\n\n" x)
     (and (and (not (number? x)) (not (list? x))) (and (not (pair? x)) (not (bool_op? x))))))
 
 ; Checks to see if a atom is a boolean operator
 (define bool_op?
   (lambda (x)
-    ; (vprintf "bool_op? called with x: ~s\n" x)
+    ; (vprintf "bool_op? called with x: ~s\n\n" x)
     (or (eq? 'false x) 
         (or (eq? 'true x) 
             (or (eq? '|| x) 
@@ -560,7 +560,7 @@
 ; Returns true if it exists, false otherwise
 (define var_exists? 
   (lambda (var state)
-    ; (vprintf "var_exists? called with var: ~s and state: ~s\n" var state)
+    ; (vprintf "var_exists? called with var: ~s and state: ~s\n\n" var state)
     (cond 
       ((null? (vars state)) #f)
       ((list? (first_var state)) (or (var_exists? var (top_state state)) 
@@ -572,7 +572,7 @@
 ; Returns true if it has been initialized, false otherwise
 (define var_init?
   (lambda (var state)
-    ; (vprintf "var_init? called with var: ~s and state: ~s\n" var state)
+    ; (vprintf "var_init? called with var: ~s and state: ~s\n\n" var state)
     (cond
       ((null? (vars state)) #f)
       ((list? (first_var state)) (or (var_init? var (top_state state)) 
@@ -585,7 +585,7 @@
 ; Helper for find_var, checks if var has been intialized
 (define find_var_helper
   (lambda (value)
-    ; (vprintf "find_var_helper called with value: ~s\n" value)
+    ; (vprintf "find_var_helper called with value: ~s\n\n" value)
     (cond
       ((eq? value 'null) (error "Variable not initialized"))
       (else value))))
@@ -593,13 +593,13 @@
 ; Generates state for first block in state
 (define top_state
   (lambda (state)
-    ; (vprintf "top_state called with state: ~s\n" state)
+    ; (vprintf "top_state called with state: ~s\n\n" state)
     (cons (first_var state) (list (first_value state)))))
 
 ; Generates state for excluding first block in state
 (define remain_state
   (lambda (state)
-    ; (vprintf remain_state called with state: ~s\n" state)
+    ; (vprintf remain_state called with state: ~s\n\n" state)
     (cons (other_vars state) (list (other_values state)))))
 
 ; Takes body from while or if statement and ensures that it is list of statemnt. Wraps into a single element list if not 
@@ -608,6 +608,11 @@
     (if (and (list? statement) (not (null? statement)) (list? (car statement)))
       statement
       (list statement))))
+
+; Takes params from closure and ensures its in list for functions that have one param
+(define ensure_param_list
+  (lambda (params)
+    (if (list? params) params (list params))))
 
 ; Checks if try has catch statement
 (define hasCatch?
@@ -640,8 +645,9 @@
 
 ; abstraction from function statement 
 (define func_name cadr)
-(define arg_list caddr)
 (define func_body cadddr)
+(define arg_list caddr)
+(define arg_list_closure cddr) ; calling on closure list
 
 ; abstraction for if/while
 (define body1 caddr)

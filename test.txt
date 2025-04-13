@@ -1,7 +1,7 @@
-function test (a) {
-  return a;
+function test(x) {
+  var y = x;
 }
 
 function main() {
-  return test(1);
+  return test(10);
 }
