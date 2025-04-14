@@ -27,7 +27,7 @@
 
 ;=====================================================================================================
 ;; Interpreter
-;; The main interpreter function that calls the parser and M_state, formater will take the output of
+;; The main interpreter function that calls the parser and M_state, formatter will take the output of
 ;; M_state and format it for the user
 ;=====================================================================================================
 ; Calls the parser on the input file
@@ -36,9 +36,9 @@
   (lambda (input)
     (M_state (parser input) init_state d_return d_next d_break d_continue d_throw)))
 
-(define formater
+(define formatter
   (lambda (input)
-    (vprintf "Formater called with input: ~s\n" input)
+    (vprintf "formatter called with input: ~s\n" input)
     (cond
       ((boolean? input) (if input 'true 'false))
       (else input))))
@@ -54,15 +54,13 @@
     (vprintf "M_state called, statement: ~s, state: ~s, next: ~s, break: ~s, continue: ~s, throw: ~s\n" statement state next break continue throw)
     (cond
       ((null? statement) (next state))
-      
-      ; ((list? (function statement))
-      ;   (M_state (function statement) state
-      ;     (lambda (v1)
-      ;       (M_state (stmt_list statement) v1 return next break continue throw))
-      ;       next break continue throw))
-      ((list? (function statement)) (M_state
+      ((list? (function statement)) (M_state 
                                      (function statement) state return (lambda (v)
-                                                                         (M_state (stmt_list statement) v return next break continue throw))
+                                                                          (M_state 
+                                                                          (stmt_list statement) 
+                                                                          v 
+                                                                          return 
+                                                                          next break continue throw))
                                      break continue throw))
       
       ((eq? (function statement) 'begin)
@@ -102,41 +100,7 @@
       ((eq? (function statement) 'funcall) (M_funcall (cdr statement) state return next break continue throw))
       (else (error (format "Invalid statement: ~s" statement))))))
 
-; (define M_funcall
-;   (lambda (statement state return next break continue throw)
-;     (vprintf "M_funcall called with statement: ~s and state: ~s\n" statement state)
-;     (if (var_exists? (car statement) state)
-;         (M_state
-;                  (cadr (find_var (car statement) state))
-;                  (M_fvalue_helper (cdr statement)
-;                                           (car (find_var (car statement) state))
-;                                           state
-;                                           (lambda (v1 v2) (func_layer
-;                                                            (car statement)
-;                                                            state
-;                                                            (lambda (v3 v4)
-;                                                             (list (cons v1 v3) (cons v2 v4))))) return next break continue throw)
-;                  return next break continue throw)
-;         (error (format "Function not declared: ~s" (car statement))))
-;     ))
-; (define M_funcall
-;   (lambda (statement state return next break continue throw)
-;     (vprintf "M_funcall called with statement: ~s and state: ~s\n" statement state)
-;     (if (var_exists? (car statement) state)
-;         (next (M_state
-;                (cadr (find_var (car statement) state))
-;                (M_fvalue_helper (cdr statement)
-;                                 (car (find_var (car statement) state))
-;                                 state
-;                                 (lambda (v1 v2) (func_layer
-;                                                  (car statement)
-;                                                  state
-;                                                  (lambda (v3 v4)
-;                                                    (list (cons v1 v3) (cons v2 v4))))) return next break continue throw)
-;                (lambda (v) state) next break continue throw))
-;         (error (format "Function not declared: ~s" (car statement))))
-;     ))
-
+; handles function call
 (define M_funcall
   (lambda (statement state return next break continue throw)
     (vprintf "M_funcall called with statement: ~s and state: ~s\n" statement state)
@@ -161,37 +125,38 @@
          next break continue throw)
         (error (format "Function not declared: ~s" (car statement))))))
 
-
+; processes function definition
 (define M_function
   (lambda (statement state return next break continue throw)
     (vprintf "M_function called with statement: ~s and state: ~s\n" statement state)
     (cond
-      ((var_exists? (cadr statement) state) (error (format "Function already exists: ~s" (function statement))))
-      ((eq? (cadr statement) 'main)
-       (M_state (cadddr statement) (add_nested_state state) return
+      ((var_exists? (func_dec_name statement) state) (error (format "Function already exists: ~s" (func_dec_name statement))))
+      ((eq? (func_dec_name statement) 'main)
+       (M_state (func_body statement) (add_nested_state state) return
                 (lambda (v) (next (remove_nested_state v)))
                 (lambda (v) (break (remove_nested_state v)))
                 (lambda (v) (continue (remove_nested_state v)))
                 throw))
-      (else (append_state (cadr statement) (create_closure (caddr statement) (cadddr statement) state) state)))))
+      (else (append_state (func_dec_name statement) (create_closure (func_params statement) (func_body statement) state) state)))))
 
+; creates a function closure
 (define create_closure
   (lambda (params body state)
     (vprintf "create_closure called with formal parameters: ~sstatement: ~s and state: ~s\n" params body state)
     (cons params (cons body (cons (lambda (v) v) '())))))
 
+; try/catch/finally handler
 (define M_try
   (lambda (statement state return next break continue throw)
     (vprintf "M_try called with try_statement: ~s, state: ~s\n" statement state)
-    (vprintf "HHHHHHEEEEERRERERE cadr of statement: ~s\n" (cadr statement))
     (M_state (tryblock statement) state return
-             (if (not (null? (cadr statement)))
-                 (if (not (null? (caddr statement)))
+             (if (not (null? (catch_exists statement)))
+                 (if (not (null? (finally_exists statement)))
                      (lambda (v) (M_state (finallyblock statement) v return next break continue throw))
                      next)
                  (lambda (v) (M_state (earlyfinallyblock statement) v return next break continue throw)))
              break continue
-             (if (not (null? (cadr statement)))
+             (if (not (null? (catch_exists statement)))
                  (lambda (v1 v2) (M_state (catchblock statement)
                                           (add_catch_state v1 (car (cadadr statement)) (car v2))
                                           return
@@ -207,7 +172,7 @@
     (vprintf "add_catch_state called with state: ~s, var: ~s, val: ~s\n" state var val)
     (append_state var val state)))
 
-; if statement. If condition is true,
+; if statement. If condition is true, then..., else
 (define M_if
   (lambda (statement state return next break continue throw)
     (vprintf "M_if called with statement: ~s, state: ~s\n" statement state)
@@ -216,30 +181,8 @@
         (if (> 4 (length statement))
             (next state)
             (M_state (body2 statement) state return next break continue throw)))))
-; (define M_if
-;   (lambda (statement state return next break continue throw)
-;     (vprintf "M_if called with statement: ~s, state: ~s\n" statement state)
-;     (if (M_boolean (condition statement) state)
-;         (M_state (body1 statement) state return next break continue throw)
-;         (M_state (body2 statement) state return next break continue throw))))
 
-; while statement. While condition is true
-; (define M_while
-;   (lambda (while_statement while_body state return next break continue throw)
-;     (vprintf "M_while called with cond: ~s, body: ~s, st: ~s\n"
-;              while_statement while_body state)
-;     (if (M_boolean while_statement state)
-;         (M_while while_statement while_body
-;                  (M_state while_body state return next break continue throw)
-;                  return next break continue throw)
-;         (next state))))
-; (define M_while
-;   (lambda (while_statement while_body state return next break continue throw)
-;     (vprintf "M_while called with while_statement: ~s, while_body: ~s, state: ~s\n"
-;               while_statement while_body state)
-;     (if (M_boolean while_statement state)
-;         (M_while while_statement while_body (M_state while_body state return (lambda (v) v) break continue throw) return (lambda (v) v) break continue throw)
-;         (next state))))
+; while loop
 (define M_while
   (lambda (while_statement while_body state return next break continue throw)
     (vprintf "M_while called with while_statement: ~s, while_body: ~s, state: ~s\n"
@@ -251,6 +194,7 @@
                  (lambda (v) (M_while while_statement while_body v return next break continue throw))
                  throw)
         (next state))))
+
 ; declare a variable
 (define M_declare
   (lambda (statement state return next break continue throw)
@@ -338,22 +282,23 @@
       ((eq? 'funcall (op expression)) (return (M_fvalue (cdr expression) state (lambda (v) v) next break continue throw)))
       (else (error "Invalid expression")))))
 
+; function value handler
 (define M_fvalue
   (lambda (statement state return next break continue throw)
     (vprintf "M_fvalue called with statement: ~s and state: ~s\n" statement state)
-    (if (var_exists? (car statement) state)
+    (if (var_exists? (function statement) state)
         (return (M_state
-                 (cadr (find_var (car statement) state))
-                 (return (M_fvalue_helper (cdr statement)
-                                          (car (find_var (car statement) state))
+                 (cadr (find_var (function statement) state))
+                 (return (M_fvalue_helper (stmt_list statement)
+                                          (car (find_var (function statement) state))
                                           state
                                           (lambda (v1 v2) (func_layer
-                                                           (car statement)
+                                                           (function statement)
                                                            state
                                                            (lambda (v3 v4)
                                                              (return (list (cons v1 v3) (cons v2 v4)))))) return next break continue throw))
                  return next break continue throw))
-        (error (format "Function not declared: ~s" (car statement))))))
+        (error (format "Function not declared: ~s" (function statement))))))
 
 (define M_fvalue_helper
   (lambda (actual formal state return return2 next break continue throw)
@@ -419,7 +364,7 @@
 (define M_return
   (lambda (statement state return next break continue throw)
     (vprintf "M_return called with statement: ~s, state: ~s\n" statement state)
-    (return (formater (M_value statement state (lambda (v) v) next break continue throw)))))
+    (return (formatter (M_value statement state (lambda (v) v) next break continue throw)))))
 
 
 ;=====================================================================================================
@@ -696,3 +641,12 @@
 (define func_name car)
 (define func_closure cadr)
 (define func_return_val cdr)
+
+; abstraction: parts of function for declaration [define x()...]
+(define func_dec_name cadr)
+(define func_params caddr)
+(define func_body cadddr)
+
+; abstraction for checking if a try statement has a catch and finally block
+(define catch_exists cadr)
+(define finally_exists caddr)
