@@ -5,8 +5,8 @@
 
 
 ;=====================================================================================================
-;; Interpreter 
-;; Henry Odza, Tyler Powers, and Benjamin Zheng 
+;; Interpreter
+;; Henry Odza, Tyler Powers, and Benjamin Zheng
 ;;
 ;; CSDS 345
 ;=====================================================================================================
@@ -27,10 +27,10 @@
 
 ;=====================================================================================================
 ;; Interpreter
-;; The main interpreter function that calls the parser and M_state, formater will take the output of 
+;; The main interpreter function that calls the parser and M_state, formater will take the output of
 ;; M_state and format it for the user
 ;=====================================================================================================
-; Calls the parser on the input file 
+; Calls the parser on the input file
 ; Input: input file with code
 (define interpret
   (lambda (input)
@@ -66,58 +66,113 @@
                                      break continue throw))
       
       ((eq? (function statement) 'begin)
-       (M_state (stmt_list statement) 
-                (add_nested_state state) 
+       (M_state (stmt_list statement)
+                (add_nested_state state)
                 return
-                (lambda (v) (next (remove_nested_state v))) 
-                (lambda (v) (break (remove_nested_state v))) 
+                (lambda (v) (next (remove_nested_state v)))
+                (lambda (v) (break (remove_nested_state v)))
                 (lambda (v) (continue (remove_nested_state v)))
                 throw))
       
       ((eq? (function statement) 'var) (next (M_declare
                                               statement
-                                              state)))
+                                              state return next break continue throw)))
       ((eq? (function statement) '=) (next (M_assign
-                                           statement
-                                           state)))
-      ((eq? (function statement) 'while) (M_while 
-                                          (condition statement) 
-                                          (body statement) 
+                                            statement
+                                            state return next break continue throw)))
+      ((eq? (function statement) 'while) (M_while
+                                          (condition statement)
+                                          (body statement)
                                           state return next break continue throw))
       ((eq? (function statement) 'if) (M_if statement state return next break continue throw))
       ((eq? (function statement) 'return) (return (M_return
                                                    (return_val statement)
-                                                   state)))
+                                                   state return next break continue throw)))
       ((eq? (function statement) 'break) (break state))
       ((eq? (function statement) 'continue) (continue state))
       ((eq? (function statement) 'throw) (throw state (value statement)))
-      ((eq? (function statement) 'try) (M_try (stmt_list statement) 
-                                              (add_nested_state state) 
-                                              return 
-                                              (lambda (v) (next (remove_nested_state v))) 
-                                              (lambda (v) (break (remove_nested_state v))) 
-                                              (lambda (v) (continue (remove_nested_state v))) 
+      ((eq? (function statement) 'try) (M_try (stmt_list statement)
+                                              (add_nested_state state)
+                                              return
+                                              (lambda (v) (next (remove_nested_state v)))
+                                              (lambda (v) (break (remove_nested_state v)))
+                                              (lambda (v) (continue (remove_nested_state v)))
                                               throw))
       ((eq? (function statement) 'function) (next (M_function statement state return next break continue throw)))
-      ((eq? (function statement) 'funcall) (next (M_funcall statement state return next break continue throw)))
+      ((eq? (function statement) 'funcall) (M_funcall (cdr statement) state return next break continue throw))
       (else (error (format "Invalid statement: ~s" statement))))))
+
+; (define M_funcall
+;   (lambda (statement state return next break continue throw)
+;     (vprintf "M_funcall called with statement: ~s and state: ~s\n" statement state)
+;     (if (var_exists? (car statement) state)
+;         (M_state
+;                  (cadr (find_var (car statement) state))
+;                  (M_fvalue_helper (cdr statement)
+;                                           (car (find_var (car statement) state))
+;                                           state
+;                                           (lambda (v1 v2) (func_layer
+;                                                            (car statement)
+;                                                            state
+;                                                            (lambda (v3 v4)
+;                                                             (list (cons v1 v3) (cons v2 v4))))) return next break continue throw)
+;                  return next break continue throw)
+;         (error (format "Function not declared: ~s" (car statement))))
+;     ))
+; (define M_funcall
+;   (lambda (statement state return next break continue throw)
+;     (vprintf "M_funcall called with statement: ~s and state: ~s\n" statement state)
+;     (if (var_exists? (car statement) state)
+;         (next (M_state
+;                (cadr (find_var (car statement) state))
+;                (M_fvalue_helper (cdr statement)
+;                                 (car (find_var (car statement) state))
+;                                 state
+;                                 (lambda (v1 v2) (func_layer
+;                                                  (car statement)
+;                                                  state
+;                                                  (lambda (v3 v4)
+;                                                    (list (cons v1 v3) (cons v2 v4))))) return next break continue throw)
+;                (lambda (v) state) next break continue throw))
+;         (error (format "Function not declared: ~s" (car statement))))
+;     ))
 
 (define M_funcall
   (lambda (statement state return next break continue throw)
     (vprintf "M_funcall called with statement: ~s and state: ~s\n" statement state)
-    ))
+    (if (var_exists? (car statement) state)
+        (M_state
+         (cadr (find_var (car statement) state))
+         (M_fvalue_helper
+          (cdr statement)
+          (car (find_var (car statement) state))
+          state
+          (lambda (v1 v2)
+            (func_layer
+             (car statement)
+             state
+             (lambda (v3 v4)
+               (list (cons v1 v3) (cons v2 v4)))))
+          return next break continue throw)
+         (lambda (v)
+           (if (null? (cdr statement)) ; Check if the return value is ignored
+               (next state)           ; Continue execution
+               (return v)))           ; Propagate the return value
+         next break continue throw)
+        (error (format "Function not declared: ~s" (car statement))))))
+
 
 (define M_function
   (lambda (statement state return next break continue throw)
     (vprintf "M_function called with statement: ~s and state: ~s\n" statement state)
     (cond
       ((var_exists? (cadr statement) state) (error (format "Function already exists: ~s" (function statement))))
-      ((eq? (cadr statement) 'main) 
+      ((eq? (cadr statement) 'main)
        (M_state (cadddr statement) (add_nested_state state) return
-                                             (lambda (v) (next (remove_nested_state v)))
-                                             (lambda (v) (break (remove_nested_state v)))
-                                             (lambda (v) (continue (remove_nested_state v)))
-                                             throw))
+                (lambda (v) (next (remove_nested_state v)))
+                (lambda (v) (break (remove_nested_state v)))
+                (lambda (v) (continue (remove_nested_state v)))
+                throw))
       (else (append_state (cadr statement) (create_closure (caddr statement) (cadddr statement) state) state)))))
 
 (define create_closure
@@ -129,34 +184,34 @@
   (lambda (statement state return next break continue throw)
     (vprintf "M_try called with try_statement: ~s, state: ~s\n" statement state)
     (vprintf "HHHHHHEEEEERRERERE cadr of statement: ~s\n" (cadr statement))
-    (M_state (tryblock statement) state return         
+    (M_state (tryblock statement) state return
              (if (not (null? (cadr statement)))
-                  (if (not (null? (caddr statement)))
-                      (lambda (v) (M_state (finallyblock statement) v return next break continue throw))
-                      next)
-                  (lambda (v) (M_state (earlyfinallyblock statement) v return next break continue throw)))
-              break continue
-              (if (not (null? (cadr statement)))
-                  (lambda (v1 v2) (M_state (catchblock statement) 
-                                           (add_catch_state v1 (car (cadadr statement)) (car v2))
-                                           return
-                                           (if (not (null? (caddr statement)))
-                                               (lambda (v) (M_state (finallyblock statement) v return next break continue throw))
-                                               next)
-                                           break continue throw))
-                  (lambda (v) (M_state (earlyfinallyblock statement) v return next break continue throw)))
-              )))
+                 (if (not (null? (caddr statement)))
+                     (lambda (v) (M_state (finallyblock statement) v return next break continue throw))
+                     next)
+                 (lambda (v) (M_state (earlyfinallyblock statement) v return next break continue throw)))
+             break continue
+             (if (not (null? (cadr statement)))
+                 (lambda (v1 v2) (M_state (catchblock statement)
+                                          (add_catch_state v1 (car (cadadr statement)) (car v2))
+                                          return
+                                          (if (not (null? (caddr statement)))
+                                              (lambda (v) (M_state (finallyblock statement) v return next break continue throw))
+                                              next)
+                                          break continue throw))
+                 (lambda (v) (M_state (earlyfinallyblock statement) v return next break continue throw)))
+             )))
 
 (define add_catch_state
   (lambda (state var val)
     (vprintf "add_catch_state called with state: ~s, var: ~s, val: ~s\n" state var val)
     (append_state var val state)))
-  
+
 ; if statement. If condition is true,
 (define M_if
   (lambda (statement state return next break continue throw)
     (vprintf "M_if called with statement: ~s, state: ~s\n" statement state)
-    (if (M_boolean (condition statement) state)
+    (if (M_boolean (condition statement) state (lambda (v) v) next break continue throw)
         (M_state (body1 statement) state return next break continue throw)
         (if (> 4 (length statement))
             (next state)
@@ -174,168 +229,197 @@
 ;     (vprintf "M_while called with cond: ~s, body: ~s, st: ~s\n"
 ;              while_statement while_body state)
 ;     (if (M_boolean while_statement state)
-;         (M_while while_statement while_body 
+;         (M_while while_statement while_body
 ;                  (M_state while_body state return next break continue throw)
 ;                  return next break continue throw)
 ;         (next state))))
 ; (define M_while
 ;   (lambda (while_statement while_body state return next break continue throw)
-;     (vprintf "M_while called with while_statement: ~s, while_body: ~s, state: ~s\n" 
+;     (vprintf "M_while called with while_statement: ~s, while_body: ~s, state: ~s\n"
 ;               while_statement while_body state)
 ;     (if (M_boolean while_statement state)
 ;         (M_while while_statement while_body (M_state while_body state return (lambda (v) v) break continue throw) return (lambda (v) v) break continue throw)
 ;         (next state))))
 (define M_while
   (lambda (while_statement while_body state return next break continue throw)
-    (vprintf "M_while called with while_statement: ~s, while_body: ~s, state: ~s\n" 
-              while_statement while_body state)
-    (if (M_boolean while_statement state)
-        (M_state while_body state return 
-                 (lambda (v) (M_while while_statement while_body v return next break continue throw)) 
+    (vprintf "M_while called with while_statement: ~s, while_body: ~s, state: ~s\n"
+             while_statement while_body state)
+    (if (M_boolean while_statement state (lambda (v) v) next break continue throw)
+        (M_state while_body state return
+                 (lambda (v) (M_while while_statement while_body v return next break continue throw))
                  (lambda (v) (next v))
                  (lambda (v) (M_while while_statement while_body v return next break continue throw))
                  throw)
         (next state))))
 ; declare a variable
 (define M_declare
-  (lambda (statement state)
+  (lambda (statement state return next break continue throw)
     (vprintf "M_declare called with statement: ~s and state: ~s\n" statement state)
     (cond
       ;((var_exists? (varname statement) state) (error ("Variable already exists")))
-      ((has_value? statement) (var_dec_assn 
-                                (varname statement) 
-                                (M_value (varvalue statement) state) state))
+      ((has_value? statement) (var_dec_assn
+                               (varname statement)
+                               (M_value (varvalue statement) state (lambda (v) v) next break continue throw) state))
       (else (var_dec (varname statement) state)))))
 
 ; assigns a value to a variable
 (define M_assign
-  (lambda (statement state)
+  (lambda (statement state return next break continue throw)
     (vprintf "M_assign called with statement: ~s and state: ~s\n" statement state)
     (if (var_exists? (varname statement) state)
-      (var_assn (varname statement) (M_value (varvalue statement) state) state)
-      (error (format "Variable not declared: ~s" (varname statement))))))
+        (var_assn (varname statement) (M_value (varvalue statement) state (lambda (v) v) next break continue throw) state return next break continue throw)
+        (error (format "Variable not declared: ~s" (varname statement))))))
 
-
-
-; evaluates a mathematical expression
 (define M_value
-  (lambda (expression state)
-    (vprintf "M_value called with expression: ~s and state: ~s\n" expression state)
+  (lambda (expression state return next break continue throw)
+    (vprintf "M_value called with expression: ~s, state~s, and next: ~s\n" expression state next)
     (cond
-      ((eq? 'true expression) #t)
-      ((eq? 'false expression) #f)
-      ((boolean? expression) expression)
-      ((number? expression) expression)
-      ((var? expression) (get_var expression state))
-      ((eq? '|| (op expression)) (or
-                                  (M_boolean (x expression) state)
-                                  (M_boolean (y expression) state)))
-      ((eq? '&& (op expression)) (and
-                                  (M_boolean (x expression) state)
-                                  (M_boolean (y expression) state)))
-      ((eq? '! (op expression)) (not (M_boolean (x expression) state)))
-      ((eq? '== (op expression)) (eq? (M_value (x expression) state) (M_value (y expression) state)))
-      ((eq? '!= (op expression)) (not (eq?
-                                       (M_value (x expression) state)
-                                       (M_value (y expression) state))))
-      ((eq? '> (op expression)) (> (M_value (x expression) state) (M_value (y expression) state)))
-      ((eq? '< (op expression)) (< (M_value (x expression) state) (M_value (y expression) state)))
-      ((eq? '>= (op expression)) (>= (M_value (x expression) state) (M_value (y expression) state)))
-      ((eq? '<= (op expression)) (<= (M_value (x expression) state) (M_value (y expression) state)))
-      ((eq? '+ (op expression)) (+ (M_value (x expression) state) (M_value (y expression) state)))
-      ((eq? '- (op expression)) (subtract expression state))
-      ((eq? '* (op expression)) (* (M_value (x expression) state) (M_value (y expression) state)))
-      ((eq? '/ (op expression)) (quotient
-                                 (M_value (x expression) state)
-                                 (M_value (y expression) state)))
-      ((eq? '% (op expression)) (remainder
-                                 (M_value (x expression) state)
-                                 (M_value (y expression) state)))
-      ((eq? 'funcall (op expression)) (M_fvalue (cdr expression) state))
+      ((eq? 'true expression) (return #t))
+      ((eq? 'false expression) (return #f))
+      ((boolean? expression) (return expression))
+      ((number? expression) (return expression))
+      ((var? expression) (return (get_var expression state)))
+      ((eq? '|| (op expression)) (M_boolean (x expression) state
+                                            (lambda (v1)
+                                              (if v1
+                                                  (return #t)
+                                                  (return (M_boolean (y expression) state return next break continue throw)))) next break continue throw))
+      ((eq? '&& (op expression)) (M_boolean (x expression) state
+                                            (lambda (v1)
+                                              (if (not v1)
+                                                  (return #f)
+                                                  (return (M_boolean (y expression) state return next break continue throw)))) next break continue throw))
+      ((eq? '! (op expression)) (M_boolean (x expression) state
+                                           (lambda (v1) (return (not v1))) next break continue throw))
+      ((eq? '== (op expression)) (M_value (x expression) state
+                                          (lambda (v1)
+                                            (M_value (y expression) state
+                                                     (lambda (v2) (return (eq? v1 v2))) next break continue throw)) next break continue throw))
+      ((eq? '!= (op expression)) (M_value (x expression) state
+                                          (lambda (v1)
+                                            (M_value (y expression) state
+                                                     (lambda (v2) (return (not (eq? v1 v2)))) next break continue throw)) next break continue throw))
+      ((eq? '> (op expression)) (M_value (x expression) state
+                                         (lambda (v1)
+                                           (M_value (y expression) state
+                                                    (lambda (v2) (return (> v1 v2))) next break continue throw)) next break continue throw))
+      ((eq? '< (op expression)) (M_value (x expression) state
+                                         (lambda (v1)
+                                           (M_value (y expression) state
+                                                    (lambda (v2) (return (< v1 v2))) next break continue throw)) next break continue throw))
+      ((eq? '>= (op expression)) (M_value (x expression) state
+                                          (lambda (v1)
+                                            (M_value (y expression) state
+                                                     (lambda (v2) (return (>= v1 v2))) next break continue throw)) next break continue throw))
+      ((eq? '<= (op expression)) (M_value (x expression) state
+                                          (lambda (v1)
+                                            (M_value (y expression) state
+                                                     (lambda (v2) (return (<= v1 v2))) next break continue throw)) next break continue throw))
+      ((eq? '+ (op expression)) (M_value (x expression) state
+                                         (lambda (v1)
+                                           (M_value (y expression) state
+                                                    (lambda (v2) (return (+ v1 v2))) next break continue throw)) next break continue throw))
+      ((eq? '- (op expression)) (M_value (x expression) state
+                                         (lambda (v1)
+                                           (M_value (y expression) state
+                                                    (lambda (v2) (return (- v1 v2))) next break continue throw)) next break continue throw))
+      ((eq? '* (op expression)) (M_value (x expression) state
+                                         (lambda (v1)
+                                           (M_value (y expression) state
+                                                    (lambda (v2) (return (* v1 v2))) next break continue throw)) next break continue throw))
+      ((eq? '/ (op expression)) (M_value (x expression) state
+                                         (lambda (v1)
+                                           (M_value (y expression) state
+                                                    (lambda (v2) (return (quotient v1 v2))) next break continue throw)) next break continue throw))
+      ((eq? '% (op expression)) (M_value (x expression) state
+                                         (lambda (v1)
+                                           (M_value (y expression) state
+                                                    (lambda (v2) (return (remainder v1 v2))) next break continue throw)) next break continue throw))
+      ((eq? 'funcall (op expression)) (return (M_fvalue (cdr expression) state (lambda (v) v) next break continue throw)))
       (else (error "Invalid expression")))))
 
-
 (define M_fvalue
-  (lambda (statement state)
+  (lambda (statement state return next break continue throw)
     (vprintf "M_fvalue called with statement: ~s and state: ~s\n" statement state)
     (if (var_exists? (car statement) state)
-        (M_state
-         (cadr (find_var (car statement) state))
-         (M_fvalue_helper (cdr statement)
-                          (car (find_var (car statement) state))
-                          state
-                          (lambda (v1 v2) (func_layer
-                                           (car statement)
-                                           state
-                                           (lambda (v3 v4)
-                                             (list (cons v1 v3) (cons v2 v4))))))
-         d_return d_next d_break d_continue d_throw)
+        (return (M_state
+                 (cadr (find_var (car statement) state))
+                 (return (M_fvalue_helper (cdr statement)
+                                          (car (find_var (car statement) state))
+                                          state
+                                          (lambda (v1 v2) (func_layer
+                                                           (car statement)
+                                                           state
+                                                           (lambda (v3 v4)
+                                                             (return (list (cons v1 v3) (cons v2 v4)))))) return next break continue throw))
+                 return next break continue throw))
         (error (format "Function not declared: ~s" (car statement))))))
 
-(define list2
-  (lambda (l1 l2)
-    (vprintf "list2 called with l1: ~s and l2: ~s\n" l1 l2)
-    (list l1 l2)))
-
-
 (define M_fvalue_helper
-  (lambda (actual formal state return)
-    (vprintf "M_fvalue_helper called with actual: ~s and formal: ~s\n" actual formal)
+  (lambda (actual formal state return return2 next break continue throw)
+    (vprintf "M_fvalue_helper called with actual: ~s, formal: ~s, state: ~s, and next: ~s\n" actual formal state next)
     (cond
       ((and (null? actual) (not (null? formal))) (error "Mismatched parameters and arguments"))
       ((and (null? formal) (not (null? actual))) (error "Mismatched parameters and arguments"))
       ((null? actual) (return '() '()))
-      (else 
+      (else
        (M_fvalue_helper (cdr actual) (cdr formal) state
-                        (lambda (v1 v2) 
+                        (lambda (v1 v2)
                           (return (cons (car formal) v1)
-                                  (cons (box (M_value (car actual) state)) v2))))))))
+                                  (cons (box (M_value (car actual) state return2 next break continue throw)) v2))) return2 next break continue throw)))))
 
-
-
-; evaluates a boolean expression  ==, !=, <, >, <=. >=
 (define M_boolean
-  (lambda (expression state)
+  (lambda (expression state return next break continue throw)
     (vprintf "M_boolean called with expression: ~s and state: ~s\n" expression state)
     (cond
-      ((boolean? expression) expression)
-      ((var? expression) (get_var expression state))
-      ((eq? 'true expression) #t)
-      ((eq? 'false expression) #f)
-      ((eq? '== (op expression)) (eq? 
-                                  (M_value (x expression) state) 
-                                  (M_value (y expression) state)))
-      ((eq? '!= (op expression)) (not (eq? 
-                                        (M_value (x expression) state) 
-                                        (M_value (y expression) state))))
-      ((eq? '> (op expression)) (> 
-                                  (M_value (x expression) state) 
-                                  (M_value (y expression) state)))
-      ((eq? '< (op expression)) (< 
-                                  (M_value (x expression) state) 
-                                  (M_value (y expression) state)))
-      ((eq? '>= (op expression)) (>= 
-                                  (M_value (x expression) state) 
-                                  (M_value (y expression) state)))
-      ((eq? '<= (op expression)) (<= 
-                                  (M_value (x expression) state) 
-                                  (M_value (y expression) state)))
-      ((eq? '&& (op expression)) (and 
-                                  (M_boolean (x expression) state) 
-                                  (M_boolean (y expression) state)))
-      ((eq? '|| (op expression)) (or 
-                                  (M_boolean (x expression) state) 
-                                  (M_boolean (y expression) state)))
-      ((eq? '! (op expression)) (not (M_boolean (x expression) state)))
-      ((eq? 'funcall (op expression)) (M_fvalue (cdr expression) state))
-      (else (error "invalid boolean expression"))
-      )))
+      ((boolean? expression) (return expression))
+      ((var? expression) (return (get_var expression state)))
+      ((eq? 'true expression) (return #t))
+      ((eq? 'false expression) (return #f))
+      ((eq? '== (op expression)) (M_value (x expression) state
+                                          (lambda (v1)
+                                            (M_value (y expression) state
+                                                     (lambda (v2) (return (eq? v1 v2))) next break continue throw)) next break continue throw))
+      ((eq? '!= (op expression)) (M_value (x expression) state
+                                          (lambda (v1)
+                                            (M_value (y expression) state
+                                                     (lambda (v2) (return (not (eq? v1 v2)))) next break continue throw)) next break continue throw))
+      ((eq? '> (op expression)) (M_value (x expression) state
+                                         (lambda (v1)
+                                           (M_value (y expression) state
+                                                    (lambda (v2) (return (> v1 v2))) next break continue throw)) next break continue throw))
+      ((eq? '< (op expression)) (M_value (x expression) state
+                                         (lambda (v1)
+                                           (M_value (y expression) state
+                                                    (lambda (v2) (return (< v1 v2))) next break continue throw)) next break continue throw))
+      ((eq? '>= (op expression)) (M_value (x expression) state
+                                          (lambda (v1)
+                                            (M_value (y expression) state
+                                                     (lambda (v2) (return (>= v1 v2))) next break continue throw)) next break continue throw))
+      ((eq? '<= (op expression)) (M_value (x expression) state
+                                          (lambda (v1)
+                                            (M_value (y expression) state
+                                                     (lambda (v2) (return (<= v1 v2))) next break continue throw)) next break continue throw))
+      ((eq? '&& (op expression)) (M_boolean (x expression) state
+                                            (lambda (v1)
+                                              (if (not v1)
+                                                  (return #f)
+                                                  (M_boolean (y expression) state return next break continue throw))) next break continue throw))
+      ((eq? '|| (op expression)) (M_boolean (x expression) state
+                                            (lambda (v1)
+                                              (if v1
+                                                  (return #t)
+                                                  (M_boolean (y expression) state return next break continue throw))) next break continue throw))
+      ((eq? '! (op expression)) (M_boolean (x expression) state
+                                           (lambda (v1) (return (not v1))) next break continue throw))
+      ((eq? 'funcall (op expression)) (M_fvalue (cdr expression) state (lambda (v) v) next break continue throw))
+      (else (error "Invalid boolean expression")))))
 
 ; return statement
 (define M_return
-  (lambda (statement state)
+  (lambda (statement state return next break continue throw)
     (vprintf "M_return called with statement: ~s, state: ~s\n" statement state)
-    (formater (M_value statement state))))
+    (return (formater (M_value statement state (lambda (v) v) next break continue throw)))))
 
 
 ;=====================================================================================================
@@ -354,10 +438,10 @@
     (append_state var val state)))
 
 (define var_assn
-  (lambda (var val state)
+  (lambda (var val state return next break continue throw)
     (vprintf "var_assn called with var: ~s, val: ~s and state: ~s\n" var val state)
     (if (var_exists? var state)
-        (add_binding var (M_value val state) state)
+        (add_binding var (M_value val state (lambda (v) v) next break continue throw) state)
       (error (format "Variable not declared: ~s" var)))))
 
 (define func_layer
@@ -482,11 +566,11 @@
 
 ; Checks to see if subtraction is a unary or binary operation
 (define subtract
-  (lambda (expression state)
+  (lambda (expression state return next break continue throw)
     (vprintf "subtract called with expression: ~s and state: ~s\n" expression state)
     (cond 
-      ((null? (unary expression)) (- (M_value (x expression) state)))
-      (else (- (M_value (x expression) state) (M_value (y expression) state))))))
+      ((null? (unary expression)) (- (M_value (x expression) state return next break continue throw)))
+      (else (- (M_value (x expression) state return next break continue throw) (M_value (y expression) state return next break continue throw))))))
 
 ; Checks to see if a atom could be variable
 (define var?
