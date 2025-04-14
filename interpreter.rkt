@@ -140,22 +140,22 @@
 (define M_funcall
   (lambda (statement state return next break continue throw)
     (vprintf "M_funcall called with statement: ~s and state: ~s\n" statement state)
-    (if (var_exists? (car statement) state)
+    (if (var_exists? (func_name statement) state)
         (M_state
-         (cadr (find_var (car statement) state))
+         (func_closure (find_var (func_name statement) state))
          (M_fvalue_helper
           (cdr statement)
-          (car (find_var (car statement) state))
+          (car (find_var (func_name statement) state))
           state
           (lambda (v1 v2)
             (func_layer
-             (car statement)
+             (func_name statement)
              state
              (lambda (v3 v4)
                (list (cons v1 v3) (cons v2 v4)))))
           return next break continue throw)
          (lambda (v)
-           (if (null? (cdr statement)) ; Check if the return value is ignored
+           (if (null? (func_return_val statement)) ; Check if the return value is ignored
                (next state)           ; Continue execution
                (return v)))           ; Propagate the return value
          next break continue throw)
@@ -691,3 +691,8 @@
 (define d_break (lambda (v) v))
 (define d_continue (lambda (v) v))
 (define d_throw (lambda (v1 v2) v1 v2))
+
+; For M_funcall
+(define func_name car)
+(define func_closure cadr)
+(define func_return_val cdr)
