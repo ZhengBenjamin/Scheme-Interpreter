@@ -411,6 +411,7 @@
 ; Sets binding of var to val in the state
 (define add_binding
   (lambda (var val state)
+    ; Ensure the variable is updated in the correct scope
     (list
       (vars state)
       (find_set_val var val (vars state) (values state))
@@ -419,16 +420,18 @@
 ; Helper for add_binding, finds var and replace its val with new val
 (define find_set_val
   (lambda (var val var_list val_list)
-    ; (vprintf "find_set_val called with var: ~s, val: ~s, var_list: ~s, val_list: ~s\n\n" 
-              ; var val var_list val_list)
+    ; Update the variable in the correct nested scope
     (cond
-      ((null? var_list) val_list) ;
-      ((list? (first_item var_list)) (cons 
-                                      (find_set_val var val (first_item var_list) (first_item val_list))
-                                      (find_set_val var val (next_item var_list) (next_item val_list))))
-      ((equal? var (vars var_list)) (cons val (next_item val_list))) ; Update binding
-      (else (cons (vars val_list) 
-                  (find_set_val var val (next_item var_list) (next_item val_list)))))))
+      ((null? var_list) val_list)
+      ((list? (first_item var_list)) 
+       (cons 
+         (find_set_val var val (first_item var_list) (first_item val_list))
+         (find_set_val var val (next_item var_list) (next_item val_list))))
+      ((equal? var (first_item var_list)) 
+       (cons val (next_item val_list))) ; Update binding
+      (else 
+       (cons (first_item val_list) 
+             (find_set_val var val (next_item var_list) (next_item val_list)))))))
 
 ; Gets the value of a variable in the state
 (define get_var
@@ -653,10 +656,13 @@
 ; Makes merged nested environment for closure
 (define apply-closure
   (lambda (closure params state next return break continue throw)
+    ; Ensure the closure environment is correctly merged with the current state
     (M_state (closure_body closure)
       (bind_parameters (closure_params closure)
         (ensure_param_list params)
-        (add_nested_state (list (vars (closure_env closure)) (values (closure_env closure)) (closure_list state))) 
+        (add_nested_state (list (vars (closure_env closure)) 
+                                (values (closure_env closure)) 
+                                (closure_list state))) 
         state)
       (lambda (val) (next val)) 
       return break continue throw)))
