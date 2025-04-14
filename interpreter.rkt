@@ -87,10 +87,10 @@
         (M_function (func_name statement) (arg_list_closure statement) state (lambda (val) (next state)) return break continue throw))
 
       ((eq? (function statement) 'var)
-        (next (M_declare statement state)))
+        (next (M_declare statement state throw)))
 
       ((eq? (function statement) '=)
-        (next (M_assign statement state)))
+        (next (M_assign statement state throw)))
 
       ((eq? (function statement) 'while)
         (M_while (condition statement) (ensure_stmt_list (body statement)) state next return break continue throw))
@@ -99,7 +99,7 @@
         (M_if statement state next return break continue throw))
 
       ((eq? (function statement) 'return)
-        (return (M_return (return_val statement) state)))
+        (return (M_return (return_val statement) state throw)))
 
       ((eq? (function statement) 'break)
         (break state))
@@ -108,7 +108,7 @@
         (continue state))
 
       ((eq? (function statement) 'throw)
-        (throw (M_value (return_val statement) state) state))
+        (throw (M_value (return_val statement) state throw) state))
 
       ((eq? (function statement) 'try)
         (M_try (try_body statement) (catch_body statement) (finally_clause statement) state next return break continue throw))
@@ -141,7 +141,7 @@
 (define M_if
   (lambda (statement state next return break continue throw)
     (vprintf "M_if called with statement: ~s, state: ~s\n\n" statement state)
-    (if (M_boolean (condition statement) state)
+    (if (M_boolean (condition statement) state throw)
         (M_state (ensure_stmt_list (body1 statement)) state return next break continue throw)
         (if (> 4 (length statement))
             (next state )
@@ -151,7 +151,7 @@
 (define M_while
   (lambda (cond body state next return break continue throw)
     (vprintf "M_while called with cond: ~s, body: ~s, state: ~s\n\n" cond body state) 
-      (if (M_boolean cond state)
+      (if (M_boolean cond state throw)
         (M_state body state return
           (lambda (new_state) (M_while cond body new_state next return break continue throw)) ; next
           (lambda (new_state) (next new_state)) ; break
@@ -161,23 +161,23 @@
 
 ; declare a variable
 (define M_declare
-  (lambda (statement state)
+  (lambda (statement state throw)
     (vprintf "M_declare called with statement: ~s and state: ~s\n\n" statement state)
     (cond
-      ((has_value? statement) (var_dec_assn (varname statement) (M_value (varvalue statement) state) state))
+      ((has_value? statement) (var_dec_assn (varname statement) (M_value (varvalue statement) state throw) state))
       (else (var_dec (varname statement) state)))))
 
 ; assigns a value to a variable
 (define M_assign
-  (lambda (statement state)
+  (lambda (statement state throw)
     (vprintf "M_assign called with statement: ~s and state: ~s\n\n" statement state)
     (if (var_exists? (varname statement) state)
-      (var_assn (varname statement) (M_value (varvalue statement) state) state)
-      (error (format "Variable not declared or out of scope: ~s" (varname statement))))))
+        (var_assn (varname statement) (M_value (varvalue statement) state throw) state throw)
+        (error (format "Variable not declared or out of scope: ~s" (varname statement))))))
 
 ; evaluates a mathematical expression
 (define M_value
-  (lambda (expression state )
+  (lambda (expression state throw)
     (vprintf "M_value called with expression: ~s and state: ~s\n\n" expression state)
     (cond
       ((eq? 'true expression) #t)
@@ -186,29 +186,29 @@
       ((number? expression) expression)
       ((var? expression) (get_var expression state))
       ((eq? '|| (op expression)) (or 
-                                  (M_boolean (x expression) state) 
-                                  (M_boolean (y expression) state)))
+                                  (M_boolean (x expression) state throw) 
+                                  (M_boolean (y expression) state throw)))
       ((eq? '&& (op expression)) (and 
-                                  (M_boolean (x expression) state) 
-                                  (M_boolean (y expression) state)))
-      ((eq? '! (op expression)) (not (M_boolean (x expression) state)))
-      ((eq? '== (op expression)) (eq? (M_value (x expression) state) (M_value (y expression) state)))
+                                  (M_boolean (x expression) state throw) 
+                                  (M_boolean (y expression) state throw)))
+      ((eq? '! (op expression)) (not (M_boolean (x expression) state throw)))
+      ((eq? '== (op expression)) (eq? (M_value (x expression) state throw) (M_value (y expression) state throw)))
       ((eq? '!= (op expression)) (not (eq? 
-                                        (M_value (x expression) state) 
-                                        (M_value (y expression) state))))
-      ((eq? '> (op expression)) (> (M_value (x expression) state) (M_value (y expression) state)))
-      ((eq? '< (op expression)) (< (M_value (x expression) state) (M_value (y expression) state)))
-      ((eq? '>= (op expression)) (>= (M_value (x expression) state) (M_value (y expression) state)))
-      ((eq? '<= (op expression)) (<= (M_value (x expression) state) (M_value (y expression) state)))
-      ((eq? '+ (op expression)) (+ (M_value (x expression) state) (M_value (y expression) state)))
-      ((eq? '- (op expression)) (subtract expression state))
-      ((eq? '* (op expression)) (* (M_value (x expression) state) (M_value (y expression) state)))
+                                        (M_value (x expression) state throw) 
+                                        (M_value (y expression) state throw))))
+      ((eq? '> (op expression)) (> (M_value (x expression) state throw) (M_value (y expression) state throw)))
+      ((eq? '< (op expression)) (< (M_value (x expression) state throw) (M_value (y expression) state throw)))
+      ((eq? '>= (op expression)) (>= (M_value (x expression) state throw) (M_value (y expression) state throw)))
+      ((eq? '<= (op expression)) (<= (M_value (x expression) state throw) (M_value (y expression) state throw)))
+      ((eq? '+ (op expression)) (+ (M_value (x expression) state throw) (M_value (y expression) state throw)))
+      ((eq? '- (op expression)) (subtract expression state throw))
+      ((eq? '* (op expression)) (* (M_value (x expression) state throw) (M_value (y expression) state throw)))
       ((eq? '/ (op expression)) (quotient 
-                                  (M_value (x expression) state) 
-                                  (M_value (y expression) state)))
+                                  (M_value (x expression) state throw) 
+                                  (M_value (y expression) state throw)))
       ((eq? '% (op expression)) (remainder 
-                                  (M_value (x expression) state) 
-                                  (M_value (y expression) state)))
+                                  (M_value (x expression) state throw) 
+                                  (M_value (y expression) state throw)))
 
       ((eq? 'funcall (function expression)) 
       (M_function (func_name expression) 
@@ -218,7 +218,7 @@
 
 ; evaluates a boolean expression  ==, !=, <, >, <=. >=
 (define M_boolean
-  (lambda (expression state)
+  (lambda (expression state throw)
     (vprintf "M_boolean called with expression: ~s and state: ~s\n\n" expression state)
     (cond
       ((boolean? expression) expression)
@@ -226,30 +226,30 @@
       ((eq? 'true expression) #t)
       ((eq? 'false expression) #f)
       ((eq? '== (op expression)) (eq? 
-                                  (M_value (x expression) state) 
-                                  (M_value (y expression) state)))
+                                  (M_value (x expression) state throw) 
+                                  (M_value (y expression) state throw)))
       ((eq? '!= (op expression)) (not (eq? 
-                                        (M_value (x expression) state) 
-                                        (M_value (y expression) state))))
+                                        (M_value (x expression) state throw) 
+                                        (M_value (y expression) state throw))))
       ((eq? '> (op expression)) (> 
-                                  (M_value (x expression) state) 
-                                  (M_value (y expression) state)))
+                                  (M_value (x expression) state throw) 
+                                  (M_value (y expression) state throw)))
       ((eq? '< (op expression)) (< 
-                                  (M_value (x expression) state) 
-                                  (M_value (y expression) state)))
+                                  (M_value (x expression) state throw) 
+                                  (M_value (y expression) state throw)))
       ((eq? '>= (op expression)) (>= 
-                                  (M_value (x expression) state) 
-                                  (M_value (y expression) state)))
+                                  (M_value (x expression) state throw) 
+                                  (M_value (y expression) state throw)))
       ((eq? '<= (op expression)) (<= 
-                                  (M_value (x expression) state) 
-                                  (M_value (y expression) state)))
+                                  (M_value (x expression) state throw) 
+                                  (M_value (y expression) state throw)))
       ((eq? '&& (op expression)) (and 
-                                  (M_boolean (x expression) state) 
-                                  (M_boolean (y expression) state)))
+                                  (M_boolean (x expression) state throw) 
+                                  (M_boolean (y expression) state throw)))
       ((eq? '|| (op expression)) (or 
-                                  (M_boolean (x expression) state) 
-                                  (M_boolean (y expression) state)))
-      ((eq? '! (op expression)) (not (M_boolean (x expression) state)))
+                                  (M_boolean (x expression) state throw) 
+                                  (M_boolean (y expression) state throw)))
+      ((eq? '! (op expression)) (not (M_boolean (x expression) state throw)))
 
       ((eq? 'funcall (function expression))
         (M_function (func_name expression) 
@@ -260,18 +260,17 @@
 
 ; return statement
 (define M_return
-  (lambda (statement state)
+  (lambda (statement state throw)
     (vprintf "M_return called with statement: ~s, state: ~s\n\n" statement state)
     (cond
       ((and (list? statement) (eq? (car statement) 'funcall)) 
-        (M_function 
-          (func_name statement) 
-          (arg_list_closure statement) 
-          state
-          (lambda (v) (formater v))
-          (lambda (v) v)
-          d_break d_continue d_throw))
-      (else (formater (M_value statement state))))))
+        (M_function (func_name statement) 
+                    (arg_list_closure statement) state
+                    (lambda (v) (formater v))
+                    (lambda (v) v)
+                    d_break d_continue throw))
+      (else (formater (M_value statement state throw))))))
+
 
 ; try catch statement
 (define M_try
@@ -332,10 +331,10 @@
     (append_state var val state)))
 
 (define var_assn
-  (lambda (var val state)
+  (lambda (var val state throw)
     ; (vprintf "var_assn called with var: ~s, val: ~s and state: ~s\n\n" var val state)
     (if (var_exists? var state)
-        (add_binding var (M_value val state) (remove_binding var state))
+        (add_binding var (M_value val state throw) (remove_binding var state))
       (error (format "Variable not declared: ~s" var)))))
 
 
@@ -504,7 +503,7 @@
 
 ; binding arguments to formal params 
 (define bind_parameters
-  (lambda (formals actual func_state state)
+  (lambda (formals actual func_state state throw)
     (vprintf "bind_parameters called with formals: ~s, actual: ~s, fstate: ~s, state: ~s\n\n" formals actual func_state state)
     (cond 
       ((null? formals) func_state)
@@ -512,8 +511,8 @@
       (else (bind_parameters 
               (cdr formals)
               (cdr actual)
-              (append_state (car formals) (M_value (car actual) state) func_state)
-              state)))))
+              (append_state (car formals) (M_value (car actual) state throw) func_state)
+              state throw)))))
 
 (define check_input_params
   (lambda (formals actual)
@@ -536,11 +535,11 @@
 
 ; Checks to see if subtraction is a unary or binary operation
 (define subtract
-  (lambda (expression state)
+  (lambda (expression state throw)
     ; (vprintf "subtract called with expression: ~s and state: ~s\n\n" expression state)
     (cond 
-      ((null? (unary expression)) (- (M_value (x expression) state)))
-      (else (- (M_value (x expression) state) (M_value (y expression) state))))))
+      ((null? (unary expression)) (- (M_value (x expression) state throw)))
+      (else (- (M_value (x expression) state throw) (M_value (y expression) state throw))))))
 
 ; Checks to see if a atom could be variable
 (define var?
@@ -663,7 +662,7 @@
         (add_nested_state (list (vars (closure_env closure)) 
                                 (values (closure_env closure)) 
                                 (closure_list state))) 
-        state)
+        state throw)
       (lambda (val) (next val)) 
       return break continue throw)))
 
