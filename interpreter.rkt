@@ -2,7 +2,7 @@
 (require "classParser.rkt")
 ; (require "functionParser.rkt")
 (provide (all-defined-out))
-
+(require racket/trace)
 
 ;=====================================================================================================
 ;; Interpreter 
@@ -17,7 +17,7 @@
 ;; Used for debugging, set verbose to #t to see print statements
 ;=====================================================================================================
 ; Verbose flag to control print statements
-(define verbose #f)
+(define verbose #t)
 
 ; Helper function for conditional printing
 (define (vprintf fmt . args)
@@ -32,9 +32,13 @@
 ;=====================================================================================================
 ; Calls the parser on the input file 
 ; Input: input file with code
+; (define interpret
+;   (lambda (input)
+;     (M_state (parser input) init_state d_return d_next d_break d_continue d_throw)))
+
 (define interpret
   (lambda (input)
-    (M_state (parser input) init_state d_return d_next d_break d_continue d_throw)))
+    (M_start (parser input) init_state d_next)))
 
 (define formater
   (lambda (input)
@@ -56,8 +60,8 @@
     (vprintf "M_start called with statement: ~s, state: ~s\n" statement state)
     (cond
       ((null? statement) (next state))
-      ((null? (cdr statement)) (M_state '() ;TODO add function to get body of main method
-                                        (M_class (stmt_list statement) state next) d_return d_next d_break d_continue d_throw))
+      ((null? (cdr statement)) (M_state (get_main (car (cdddar statement)) d_return d_next) ;TODO add function to get body of main method
+                                        (M_class (cdar statement) state) d_return d_next d_break d_continue d_throw))
       ((list? (function statement)) (M_start
                                      (function statement) state (lambda (v)
                                                                          (M_start (stmt_list statement) v next ))))
@@ -70,7 +74,7 @@
     (vprintf "M_class called with statement: ~s, state: ~s\n" statement state)
     (cond
       ((var_exists? (car statement) state) (error (format "Class already exists: ~s" (car statement))))
-      (else (append_state (car statement) (create_class_closure (cdr statement)))))
+      (else (append_state (car statement) (create_class_closure (cdr statement) state) state)))
     ))
 
 ; creates class closure
@@ -79,7 +83,7 @@
     (vprintf "create_class_closure called with statement: ~s, state: ~s\n" statement state)
     (list 
      '() ; TODO: superclass goes here
-     (caddr statement) ; Body of the class
+     (cdr statement) ; Body of the class
      (M_closure statement init_state d_next)
      )))
 
@@ -94,6 +98,14 @@
       ((eq? (car statement) 'static-function) (next state))
       (else (error "Invalid statement in class"))
       )))
+
+(define get_main
+  (lambda (statement return next)
+    (vprintf "get_main called with statement: ~s\n" statement)
+    (cond
+      ((not (list? statement)) (error "no main functino found"))
+      ((eq? (caar statement) 'static-function) (return (cdddar statement)))
+      (else (get_main (cdr statement) return next)))))
 
 (define M_state
   (lambda (statement state return next break continue throw)
@@ -572,3 +584,13 @@
 (define d_break (lambda (v) v))
 (define d_continue (lambda (v) v))
 (define d_throw (lambda (v1 v2) v1 v2))
+
+(trace M_start)
+(trace M_class)
+(trace create_class_closure)
+(trace M_closure)
+(trace get_main)
+(trace M_state)
+(trace M_value)
+(trace M_boolean)
+(trace M_return)
