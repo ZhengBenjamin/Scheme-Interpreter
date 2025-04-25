@@ -50,11 +50,50 @@
 ;=====================================================================================================
 
 ; M_start is the entry point for the interpreter. It creates all of the necessary closures, global 
-; state, and calls M_state to start the interpreter when it comes across the main function.
+; state, and calls M_state to start the interpreter after it creates final class.
 (define M_start
-  (lambda (statement state return next break continue throw)
+  (lambda (statement state next)
     (vprintf "M_start called with statement: ~s, state: ~s\n" statement state)
-    (M_state statement state return next break continue throw)))
+    (cond
+      ((null? statement) (next state))
+      ((null? (cdr statement)) (M_state '() ;TODO add function to get body of main method
+                                        (M_class (stmt_list statement) state next) d_return d_next d_break d_continue d_throw))
+      ((list? (function statement)) (M_start
+                                     (function statement) state (lambda (v)
+                                                                         (M_start (stmt_list statement) v next ))))
+      ((eq? (function statement) 'class) (next (M_class (stmt_list statement) state)))
+      (else (error "No main function found")))))
+
+; Processes class definitions, returns state with class and class closure
+(define M_class
+  (lambda (statement state)
+    (vprintf "M_class called with statement: ~s, state: ~s\n" statement state)
+    (cond
+      ((var_exists? (car statement) state) (error (format "Class already exists: ~s" (car statement))))
+      (else (append_state (car statement) (create_class_closure (cdr statement)))))
+    ))
+
+; creates class closure
+(define create_class_closure
+  (lambda (statement state)
+    (vprintf "create_class_closure called with statement: ~s, state: ~s\n" statement state)
+    (list 
+     '() ; TODO: superclass goes here
+     (caddr statement) ; Body of the class
+     (M_closure statement init_state d_next)
+     )))
+
+(define M_closure
+  (lambda (statement state next)
+    (vprintf "create_class_closure called with statement: ~s, state: ~s\n" statement state)
+    (cond
+      ((null? statement) (next state))
+      ((list? (car statement)) (M_closure (car statement) state (lambda (v) (M_closure (cdr statement) v next))))
+      ((eq? (car statement) 'var) (next (M_declare statement state))) ; TODO: Replace M_declare with one that can handle inherited values
+      ((eq? (car statement) 'function) '()) ; TODO: add function closures
+      ((eq? (car statement) 'static-function) (next state))
+      (else (error "Invalid statement in class"))
+      )))
 
 (define M_state
   (lambda (statement state return next break continue throw)
