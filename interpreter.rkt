@@ -1,5 +1,5 @@
 #lang racket
-(require "simpleParser.rkt")
+(require "classParser.rkt")
 ; (require "functionParser.rkt")
 (provide (all-defined-out))
 
@@ -48,6 +48,13 @@
 ;; M_ functions
 ;; These functions are the main stateful functions that are called by the parser
 ;=====================================================================================================
+
+; M_start is the entry point for the interpreter. It creates all of the necessary closures, global 
+; state, and calls M_state to start the interpreter when it comes across the main function.
+(define M_start
+  (lambda (statement state return next break continue throw)
+    (vprintf "M_start called with statement: ~s, state: ~s\n" statement state)
+    (M_state statement state return next break continue throw)))
 
 (define M_state
   (lambda (statement state return next break continue throw)
