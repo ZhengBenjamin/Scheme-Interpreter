@@ -154,10 +154,10 @@
 
 
 (printf "\nPart4 Tests")
-(printf "\nP4Test 1\n")
-(check-equal? (interpret "tests/P4test1.txt") 15 "P4test1")
-; (printf "\nP4Test 2\n")
-; (check-equal? (interpret "tests/P4test2.txt") 12 "P4test2")
+; (printf "\nP4Test 1\n")
+; (check-equal? (interpret "tests/P4test1.txt") 15 "P4test1")
+(printf "\nP4Test 2\n")
+(check-equal? (interpret "tests/P4test2.txt") 12 "P4test2")
 ; (printf "\nP4Test 3\n")
 ; (check-equal? (interpret "tests/P4test3.txt") 125 "P4test3")
 ; (printf "\nP4Test 4\n")

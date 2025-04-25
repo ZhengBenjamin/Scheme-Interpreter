@@ -195,30 +195,7 @@
         (if (> 4 (length statement))
             (next state)
             (M_state (body2 statement) state return next break continue throw)))))
-; (define M_if
-;   (lambda (statement state return next break continue throw)
-;     (vprintf "M_if called with statement: ~s, state: ~s\n" statement state)
-;     (if (M_boolean (condition statement) state)
-;         (M_state (body1 statement) state return next break continue throw)
-;         (M_state (body2 statement) state return next break continue throw))))
 
-; while statement. While condition is true
-; (define M_while
-;   (lambda (while_statement while_body state return next break continue throw)
-;     (vprintf "M_while called with cond: ~s, body: ~s, st: ~s\n"
-;              while_statement while_body state)
-;     (if (M_boolean while_statement state)
-;         (M_while while_statement while_body 
-;                  (M_state while_body state return next break continue throw)
-;                  return next break continue throw)
-;         (next state))))
-; (define M_while
-;   (lambda (while_statement while_body state return next break continue throw)
-;     (vprintf "M_while called with while_statement: ~s, while_body: ~s, state: ~s\n" 
-;               while_statement while_body state)
-;     (if (M_boolean while_statement state)
-;         (M_while while_statement while_body (M_state while_body state return (lambda (v) v) break continue throw) return (lambda (v) v) break continue throw)
-;         (next state))))
 (define M_while
   (lambda (while_statement while_body state return next break continue throw)
     (vprintf "M_while called with while_statement: ~s, while_body: ~s, state: ~s\n" 
@@ -285,8 +262,16 @@
       ((eq? '% (op expression)) (remainder 
                                   (M_value (x expression) state) 
                                   (M_value (y expression) state)))
-
+      ((eq? 'new (op expression)) (get_var (x expression) state))
+      ((eq? 'dot (op expression)) (M_dot_value (x expression) (y expression) state))
       (else (error "Invalid expression")))))
+
+(define M_dot_value
+  (lambda (var value state)
+    (cond
+      ((eq? var 'super) '()) ;TODO: implement super
+      ((eq? var 'this) '()) ;TODO: implement this
+      (else (get_var value (caddr (get_var var state)))))))
 
 ; evaluates a boolean expression  ==, !=, <, >, <=. >=
 (define M_boolean
@@ -585,12 +570,17 @@
 (define d_continue (lambda (v) v))
 (define d_throw (lambda (v1 v2) v1 v2))
 
-(trace M_start)
-(trace M_class)
-(trace create_class_closure)
-(trace M_closure)
-(trace get_main)
-(trace M_state)
-(trace M_value)
-(trace M_boolean)
-(trace M_return)
+; (trace M_start)
+; (trace M_class)
+; (trace create_class_closure)
+; (trace M_closure)
+; (trace get_main)
+; (trace M_state)
+; (trace M_try)
+; (trace M_if)
+; (trace M_while)
+; (trace M_declare)
+; (trace M_assign)
+; (trace M_value)
+; (trace M_boolean)
+; (trace M_return)
