@@ -17,7 +17,7 @@
 ;; Used for debugging, set verbose to #t to see print statements
 ;=====================================================================================================
 ; Verbose flag to control print statements
-(define verbose #f)
+(define verbose #t)
 
 ; Helper function for conditional printing
 (define (vprintf fmt . args)
@@ -61,7 +61,7 @@
     (cond
       ((null? statement) (next state))
       ((null? (cdr statement)) (M_state (get_main (car (cdddar statement)) d_return d_next) ;TODO add function to get body of main method
-                                        (M_class (cdar statement) state) d_return d_next d_break d_continue d_throw))
+                                        (add_nested_state (M_class (cdar statement) state)) d_return d_next d_break d_continue d_throw))
       ((list? (function statement)) (M_start
                                      (function statement) state (lambda (v)
                                                                          (M_start (stmt_list statement) v next ))))
@@ -283,13 +283,13 @@
       ((eq? instance 'super) '()) ;TODO: implement super
       ((eq? instance 'this) '()) ;TODO: implement this
       (else (M_state (cadr (get_var method (caddr (get_var instance state))))
-                                          (bind actual
-                                                (car
-                                                 (get_var method (caddr (get_var instance state))))
-                                                (add_nested_state (caddr (get_var instance state))))
-                                          d_return d_next d_break d_continue d_throw
+                     (bind actual
+                           (car(get_var method (caddr (get_var instance state))))
+                           (add_nested_state (append_state 'this (caddr (get_var instance state)) init_state))) ; TODO, does not pass in global state atm
+                     d_return d_next d_break d_continue d_throw
                                           ))) ; TODO: implement M_state after making M_value tail recursive
       ))
+
 
 (define bind
   (lambda (actual formal state)
@@ -303,7 +303,7 @@
     (vprintf "M_dot_value called with instance: ~s, value: ~s and state: ~s\n" instance value state)
     (cond
       ((eq? instance 'super) '()) ;TODO: implement super
-      ((eq? instance 'this) '()) ;TODO: implement this
+      ((eq? instance 'this) (get_var value (get_var instance state))) ;TODO: implement this
       (else (get_var value (caddr (get_var instance state)))))))
 
 ; evaluates a boolean expression  ==, !=, <, >, <=. >=
@@ -552,6 +552,7 @@
     (cons (other_vars state) (list (other_values state)))))
 
 
+
 ;=====================================================================================================
 ;; Abstractions
 ;=====================================================================================================
@@ -603,20 +604,20 @@
 (define d_continue (lambda (v) v))
 (define d_throw (lambda (v1 v2) v1 v2))
 
-; (trace M_start)
-; (trace M_class)
-; (trace create_class_closure)
-; (trace M_class_closure)
-; (trace get_main)
-; (trace M_state)
-; (trace M_try)
-; (trace M_if)
-; (trace M_while)
-; (trace M_declare)
-; (trace M_assign)
-; (trace M_value)
-; (trace M_funcall_value)
-; (trace bind)
-; (trace M_dot_value)
-; (trace M_boolean)
-; (trace M_return)
+(trace M_start)
+(trace M_class)
+(trace create_class_closure)
+(trace M_class_closure)
+(trace get_main)
+(trace M_state)
+(trace M_try)
+(trace M_if)
+(trace M_while)
+(trace M_declare)
+(trace M_assign)
+(trace M_value)
+(trace M_funcall_value)
+(trace bind)
+(trace M_dot_value)
+(trace M_boolean)
+(trace M_return)
