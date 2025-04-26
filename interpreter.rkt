@@ -17,7 +17,7 @@
 ;; Used for debugging, set verbose to #t to see print statements
 ;=====================================================================================================
 ; Verbose flag to control print statements
-(define verbose #t)
+(define verbose #f)
 
 ; Helper function for conditional printing
 (define (vprintf fmt . args)
@@ -84,20 +84,29 @@
     (list 
      '() ; TODO: superclass goes here
      (cdr statement) ; Body of the class
-     (M_closure statement init_state d_next)
+     (M_class_closure statement init_state d_next)
      )))
 
-(define M_closure
+(define M_class_closure
   (lambda (statement state next)
     (vprintf "create_class_closure called with statement: ~s, state: ~s\n" statement state)
     (cond
       ((null? statement) (next state))
-      ((list? (car statement)) (M_closure (car statement) state (lambda (v) (M_closure (cdr statement) v next))))
+      ((list? (car statement)) (M_class_closure (car statement) state (lambda (v) (M_class_closure (cdr statement) v next))))
       ((eq? (car statement) 'var) (next (M_declare statement state))) ; TODO: Replace M_declare with one that can handle inherited values
-      ((eq? (car statement) 'function) '()) ; TODO: add function closures
+      ((eq? (car statement) 'function) (next (append_state (cadr statement) (create_method_closure (cddr statement) state) state))) ; TODO: add function closures
       ((eq? (car statement) 'static-function) (next state))
       (else (error "Invalid statement in class"))
       )))
+
+(define create_method_closure
+  (lambda (statement state)
+    (vprintf "create_method_closure called with statement: ~s, state: ~s\n" statement state)
+    (list
+     (car statement) ; Formal params
+     (cadr statement) ; Body
+     )
+    ))
 
 (define get_main
   (lambda (statement return next)
@@ -264,14 +273,38 @@
                                   (M_value (y expression) state)))
       ((eq? 'new (op expression)) (get_var (x expression) state))
       ((eq? 'dot (op expression)) (M_dot_value (x expression) (y expression) state))
+      ((eq? 'funcall (op expression)) (M_funcall_value (cadadr expression) (car (cddadr expression)) (cddr expression) state))
       (else (error "Invalid expression")))))
 
-(define M_dot_value
-  (lambda (var value state)
+(define M_funcall_value
+  (lambda (instance method actual state)
+    (vprintf "M_funcall_value called with instance: ~s, method: ~s, actual paramters: ~s and state: ~s\n" instance method actual state)
     (cond
-      ((eq? var 'super) '()) ;TODO: implement super
-      ((eq? var 'this) '()) ;TODO: implement this
-      (else (get_var value (caddr (get_var var state)))))))
+      ((eq? instance 'super) '()) ;TODO: implement super
+      ((eq? instance 'this) '()) ;TODO: implement this
+      (else (M_state (cadr (get_var method (caddr (get_var instance state))))
+                                          (bind actual
+                                                (car
+                                                 (get_var method (caddr (get_var instance state))))
+                                                (add_nested_state (caddr (get_var instance state))))
+                                          d_return d_next d_break d_continue d_throw
+                                          ))) ; TODO: implement M_state after making M_value tail recursive
+      ))
+
+(define bind
+  (lambda (actual formal state)
+    (vprintf "bind called with actual parameters: ~s, formal parameters: ~s, and state: ~s" actual formal state)
+    (cond
+      ((not (null? actual)) (bind (cdr actual) (cdr formal) (append_state (car formal) (car actual) state)))
+      (else state))))
+
+(define M_dot_value
+  (lambda (instance value state)
+    (vprintf "M_dot_value called with instance: ~s, value: ~s and state: ~s\n" instance value state)
+    (cond
+      ((eq? instance 'super) '()) ;TODO: implement super
+      ((eq? instance 'this) '()) ;TODO: implement this
+      (else (get_var value (caddr (get_var instance state)))))))
 
 ; evaluates a boolean expression  ==, !=, <, >, <=. >=
 (define M_boolean
@@ -573,7 +606,7 @@
 ; (trace M_start)
 ; (trace M_class)
 ; (trace create_class_closure)
-; (trace M_closure)
+; (trace M_class_closure)
 ; (trace get_main)
 ; (trace M_state)
 ; (trace M_try)
@@ -582,5 +615,8 @@
 ; (trace M_declare)
 ; (trace M_assign)
 ; (trace M_value)
+; (trace M_funcall_value)
+; (trace bind)
+; (trace M_dot_value)
 ; (trace M_boolean)
 ; (trace M_return)
