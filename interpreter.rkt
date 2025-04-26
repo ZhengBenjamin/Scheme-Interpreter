@@ -17,7 +17,7 @@
 ;; Used for debugging, set verbose to #t to see print statements
 ;=====================================================================================================
 ; Verbose flag to control print statements
-(define verbose #t)
+(define verbose #f)
 
 ; Helper function for conditional printing
 (define (vprintf fmt . args)
@@ -165,8 +165,24 @@
                                               (lambda (v) (break (remove_nested_state v))) 
                                               (lambda (v) (continue (remove_nested_state v))) 
                                               throw))
-
+      ((eq? (function statement) 'funcall)  (next (M_funcall_state (cadadr statement) (car (cddadr statement)) (cddr statement) state)))
       (else (error (format "Invalid statement: ~s" statement))))))
+
+; Called when return value of funcall is not needed, returns original state, should still be effected because of boxes
+(define M_funcall_state
+  (lambda (instance method actual state)
+    (vprintf "M_funcall_state called with instance: ~s, method: ~s, actual paramters: ~s and state: ~s\n" instance method actual state)
+    (cond
+      ((eq? instance 'super) '()) ;TODO: implement super
+      ((eq? instance 'this) '()) ;TODO: implement this
+      (else (M_state (cadr (get_var method (caddr (get_var instance state))))
+                     (bind actual
+                           (car(get_var method (caddr (get_var instance state))))
+                           (add_nested_state (append_state 'this (caddr (get_var instance state)) init_state)) state) ; TODO, does not pass in global state atm
+                     d_return d_next d_break d_continue d_throw
+                                          ))) ; TODO: implement M_state after making M_value tail recursive
+    state
+    ))
 
 (define M_try
   (lambda (statement state return next break continue throw)
@@ -271,10 +287,41 @@
       ((eq? '% (op expression)) (remainder 
                                   (M_value (x expression) state) 
                                   (M_value (y expression) state)))
-      ((eq? 'new (op expression)) (get_var (x expression) state))
+      ((eq? 'new (op expression)) (create_class_instance (get_var (x expression) state))) ; TODO: does not actually create new instance because of boxes
       ((eq? 'dot (op expression)) (M_dot_value (x expression) (y expression) state))
       ((eq? 'funcall (op expression)) (M_funcall_value (cadadr expression) (car (cddadr expression)) (cddr expression) state))
       (else (error "Invalid expression")))))
+
+(define create_class_instance
+  (lambda (class)
+    (vprintf "create_class_instance called with class: ~s\n" class)
+    (list
+     (car class)
+     (cadr class)
+     (create_class_instance_helper (caaddr class) (car (cdaddr class)) (lambda (v1 v2) (list v1 v2))))))
+
+(define create_class_instance_helper
+  (lambda (vars vals return)
+    (vprintf "create_class_instance_helper called with class vars: ~s and vals: ~s\n" vars vals)
+    (cond
+      ((null? vars) (return vars vals))
+      ((list? (car vars)) 
+       (create_class_instance_helper (cdr vars) 
+                                     (cdr vals) 
+                                     (lambda (v1 v2)
+                                       (create_class_instance_helper 
+                                        (car vars) 
+                                        (car vals) 
+                                        (lambda (v3 v4) 
+                                          (return (cons (v3 v1)) 
+                                                  (cons (v4 v2))))
+                                        ))))
+      (else (create_class_instance_helper (cdr vars)
+                                          (cdr vals)
+                                          (lambda (v1 v2) 
+                                            (return (cons (car vars) v1) 
+                                                    (cons (box (unbox (car vals))) v2)))))
+      )))
 
 (define M_funcall_value
   (lambda (instance method actual state)
@@ -285,17 +332,17 @@
       (else (M_state (cadr (get_var method (caddr (get_var instance state))))
                      (bind actual
                            (car(get_var method (caddr (get_var instance state))))
-                           (add_nested_state (append_state 'this (caddr (get_var instance state)) init_state))) ; TODO, does not pass in global state atm
+                           (add_nested_state (append_state 'this (caddr (get_var instance state)) init_state)) state) ; TODO, does not pass in global state atm
                      d_return d_next d_break d_continue d_throw
                                           ))) ; TODO: implement M_state after making M_value tail recursive
       ))
 
 
 (define bind
-  (lambda (actual formal state)
-    (vprintf "bind called with actual parameters: ~s, formal parameters: ~s, and state: ~s" actual formal state)
+  (lambda (actual formal state real_state)
+    (vprintf "bind called with actual parameters: ~s, formal parameters: ~s, and state: ~s\n" actual formal state)
     (cond
-      ((not (null? actual)) (bind (cdr actual) (cdr formal) (append_state (car formal) (car actual) state)))
+      ((not (null? actual)) (bind (cdr actual) (cdr formal) (append_state (car formal) (M_value (car actual) real_state) state) real_state))
       (else state))))
 
 (define M_dot_value
@@ -369,7 +416,10 @@
   (lambda (var val state)
     (vprintf "var_assn called with var: ~s, val: ~s and state: ~s\n" var val state)
     (if (var_exists? var state)
-        (add_binding var (M_value val state) state)
+        (cond
+          ((list? var) (add_binding (caddr var) (M_value val state) (get_var (cadr var) state)))
+          (else (add_binding var (M_value val state) state)))
+        
       (error (format "Variable not declared: ~s" var)))))
 
 
@@ -514,8 +564,13 @@
       ((null? (vars state)) #f)
       ((list? (first_var state)) (or (var_exists? var (top_state state)) 
                                       (var_exists? var (remain_state state))))
+      ; (vprintf "var_exists? sanity check with var: ~s and state ~s\n" var state)
+      ((list? var) (if (equal? (cadr var) (first_var state)) ; checks to see if using dot
+                       #t
+                       (var_exists? var (remain_state state))))
       ((equal? var (first_var state)) #t)
       (else (var_exists? var (remain_state state))))))
+
 
 ; Checks if a variable has been initialized with a value
 ; Returns true if it has been initialized, false otherwise
@@ -604,20 +659,21 @@
 (define d_continue (lambda (v) v))
 (define d_throw (lambda (v1 v2) v1 v2))
 
-(trace M_start)
-(trace M_class)
-(trace create_class_closure)
-(trace M_class_closure)
-(trace get_main)
-(trace M_state)
-(trace M_try)
-(trace M_if)
-(trace M_while)
-(trace M_declare)
-(trace M_assign)
-(trace M_value)
-(trace M_funcall_value)
-(trace bind)
-(trace M_dot_value)
-(trace M_boolean)
-(trace M_return)
+; (trace M_start)
+; (trace M_class)
+; (trace create_class_closure)
+; (trace M_class_closure)
+; (trace get_main)
+; (trace M_state)
+; (trace M_funcall_state)
+; (trace M_try)
+; (trace M_if)
+; (trace M_while)
+; (trace M_declare)
+; (trace M_assign)
+; (trace M_value)
+; (trace M_funcall_value)
+; (trace bind)
+; (trace M_dot_value)
+; (trace M_boolean)
+; (trace M_return)
