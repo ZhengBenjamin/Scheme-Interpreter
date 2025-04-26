@@ -1,8 +1,9 @@
-var x = 10;
-{
-  var y = 2;
-  var z = x * y;
-  x = z;
-  return 50;
+class A {
+  var x = 5;
+  var y = 10;
+
+  static function main() {
+    var a = new A();
+    return a.x + a.y;
+  }
 }
-return x;

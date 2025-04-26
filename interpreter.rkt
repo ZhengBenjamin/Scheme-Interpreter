@@ -30,15 +30,12 @@
 ;; The main interpreter function that calls the parser and M_state, formater will take the output of 
 ;; M_state and format it for the user
 ;=====================================================================================================
-; Calls the parser on the input file 
-; Input: input file with code
-; (define interpret
-;   (lambda (input)
-;     (M_state (parser input) init_state d_return d_next d_break d_continue d_throw)))
 
+; Calls the parser on the input file 
+; file: Full program to be interpreted, classname: Name of the class that contains the main method
 (define interpret
-  (lambda (input)
-    (M_start (parser input) init_state d_next)))
+  (lambda (file classname)
+    (M_start (parser file) (string->symbol classname) init_state d_next)))
 
 (define formater
   (lambda (input)
@@ -56,16 +53,16 @@
 ; M_start is the entry point for the interpreter. It creates all of the necessary closures, global 
 ; state, and calls M_state to start the interpreter after it creates final class.
 (define M_start
-  (lambda (statement state next)
+  (lambda (statement classname state next)
     (vprintf "M_start called with statement: ~s, state: ~s\n" statement state)
     (cond
-      ((null? statement) (next state))
-      ((null? (cdr statement)) (M_state (get_main (car (cdddar statement)) d_return d_next) ;TODO add function to get body of main method
-                                        (add_nested_state (M_class (cdar statement) state)) d_return d_next d_break d_continue d_throw))
+      ((null? statement) (execute_main classname state)) ; Done parsing: execute main
       ((list? (function statement)) (M_start
-                                     (function statement) state (lambda (v)
-                                                                         (M_start (stmt_list statement) v next ))))
+                                     (function statement) classname state (lambda (v)
+                                                                         (M_start (stmt_list statement) classname v next ))))
       ((eq? (function statement) 'class) (next (M_class (stmt_list statement) state)))
+      ; ((null? statement) (M_state (get_main (car (cdddar statement)) d_return d_next) ;TODO add function to get body of main method
+      ;                                   (add_nested_state (M_class (cdar statement) state)) d_return d_next d_break d_continue d_throw))
       (else (error "No main function found")))))
 
 ; Processes class definitions, returns state with class and class closure
@@ -82,20 +79,22 @@
   (lambda (statement state)
     (vprintf "create_class_closure called with statement: ~s, state: ~s\n" statement state)
     (list 
-     '() ; TODO: superclass goes here
-     (cdr statement) ; Body of the class
-     (M_class_closure statement init_state d_next)
-     )))
+      (car statement)
+      (cadr statement) ; Body of the class
+      (M_class_closure (cadr statement) init_state d_next)
+    )))
 
+; Creates a closure for the class, which will be used to create instances of the class
+; Will contain state in form of (varname, varvalue) pairs. Method names will be bound to varname, closures will be bound to varvalue
 (define M_class_closure
   (lambda (statement state next)
-    (vprintf "create_class_closure called with statement: ~s, state: ~s\n" statement state)
+    (vprintf "M_class_closure called with statement: ~s, state: ~s\n" statement state)
     (cond
-      ((null? statement) (next state))
-      ((list? (car statement)) (M_class_closure (car statement) state (lambda (v) (M_class_closure (cdr statement) v next))))
-      ((eq? (car statement) 'var) (next (M_declare statement state))) ; TODO: Replace M_declare with one that can handle inherited values
+      ((null? statement) (next state)) ; No more statements: return state 
+      ((list? (car statement)) (next (M_class_closure (car statement) state (lambda (v) (M_class_closure (cdr statement) v next))))) ;Go thru list
+      ((eq? (car statement) 'var) (next (M_declare statement state)))
       ((eq? (car statement) 'function) (next (append_state (cadr statement) (create_method_closure (cddr statement) state) state))) ; TODO: add function closures
-      ((eq? (car statement) 'static-function) (next state))
+      ((eq? (car statement) 'static-function) (next (append_state (cadr statement) (create_method_closure (cddr statement) state) state))) ; MaybeTemp: Treats main func as regular function
       (else (error "Invalid statement in class"))
       )))
 
@@ -107,14 +106,6 @@
      (cadr statement) ; Body
      )
     ))
-
-(define get_main
-  (lambda (statement return next)
-    (vprintf "get_main called with statement: ~s\n" statement)
-    (cond
-      ((not (list? statement)) (error "no main functino found"))
-      ((eq? (caar statement) 'static-function) (return (cdddar statement)))
-      (else (get_main (cdr statement) return next)))))
 
 (define M_state
   (lambda (statement state return next break continue throw)
@@ -232,6 +223,7 @@
                  (lambda (v) (M_while while_statement while_body v return next break continue throw))
                  throw)
         (next state))))
+
 ; declare a variable
 (define M_declare
   (lambda (statement state)
@@ -396,6 +388,11 @@
     (vprintf "M_return called with statement: ~s, state: ~s\n" statement state)
     (formater (M_value statement state))))
 
+; Executes the main function when whole program is done parsing
+(define execute_main
+  (lambda (classname state)
+    (M_state (get_main classname state) state d_return d_next d_break d_continue d_throw)
+    ))
 
 ;=====================================================================================================
 ;; Variable Logic
@@ -606,7 +603,14 @@
     (vprintf "remain_state called with state: ~s\n" state)
     (cons (other_vars state) (list (other_values state)))))
 
+; Gets body of main method from state 
+(define get_main
+  (lambda (classname state)
+    (cadr (get_var 'main (caddr (get_var classname state))))))
 
+(define get_class_state
+  (lambda (classname state) 
+    (cddr (get_var classname state))))
 
 ;=====================================================================================================
 ;; Abstractions
@@ -648,6 +652,8 @@
 (define next_item cdr)
 (define first_item car)
 
+; Abstraction for closures
+
 ; The state of the interpreter. Starts empty
 ; Format (var_list val_list)
 (define init_state '(() ()))
@@ -659,21 +665,24 @@
 (define d_continue (lambda (v) v))
 (define d_throw (lambda (v1 v2) v1 v2))
 
-; (trace M_start)
-; (trace M_class)
-; (trace create_class_closure)
-; (trace M_class_closure)
-; (trace get_main)
-; (trace M_state)
-; (trace M_funcall_state)
-; (trace M_try)
-; (trace M_if)
-; (trace M_while)
+(trace M_start)
+(trace M_class)
+(trace create_class_closure)
+(trace M_class_closure)
+(trace M_state)
+(trace M_funcall_state)
+(trace M_try)
+(trace M_if)
+(trace M_while)
 ; (trace M_declare)
-; (trace M_assign)
-; (trace M_value)
-; (trace M_funcall_value)
-; (trace bind)
-; (trace M_dot_value)
-; (trace M_boolean)
-; (trace M_return)
+(trace M_assign)
+(trace M_value)
+(trace M_funcall_value)
+(trace bind)
+(trace M_dot_value)
+(trace M_boolean)
+(trace M_return)
+(trace create_method_closure)
+(trace execute_main)
+(trace get_main)
+(trace get_var)
