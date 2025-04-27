@@ -1,14 +1,20 @@
 class A {
   var x = 1;
-
+  
   function getX() {
-    return this.x; 
+    return this.x;
   }
 }
 
 class B extends A {
-  
+
+  var x = 2;
+
+  function getXX() {
+    return super.getX(); 
+  }
+
   static function main() {
-    return new B().getX(); 
+    return new B().getXX(); 
   }
 }

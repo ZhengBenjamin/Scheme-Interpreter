@@ -79,21 +79,24 @@
   (lambda (statement state)
     (vprintf "create_class_closure called with statement: ~s, state: ~s\n" statement state)
     (list 
-      (car statement)
+      (get_superclass statement) ; Superclass 
       (cadr statement) ; Body of the class
-      (M_class_closure (cadr statement) init_state d_next)
+      (M_class_closure (cadr statement) (get_superclass statement) init_state state d_next)
     )))
 
 ; Creates a closure for the class, which will be used to create instances of the class
 ; Will contain state in form of (varname, varvalue) pairs. Method names will be bound to varname, closures will be bound to varvalue
 (define M_class_closure
-  (lambda (statement state next)
+  (lambda (statement superclass state global_state next)
     (vprintf "M_class_closure called with statement: ~s, state: ~s\n" statement state)
     (cond
+      ((not (null? superclass)) (M_class_closure (get_parent_statement superclass global_state) 
+                                  (get_parent_superclass superclass global_state) state global_state
+                                    (lambda (parent_state) (M_class_closure statement '() parent_state global_state next))))
       ((null? statement) (next state)) ; No more statements: return state 
-      ((list? (car statement)) (next (M_class_closure (car statement) state (lambda (v) (M_class_closure (cdr statement) v next))))) ;Go thru list
+      ((list? (car statement)) (M_class_closure (car statement) superclass state global_state (lambda (v) (M_class_closure (cdr statement) superclass v global_state next)))) ;Go thru list
       ((eq? (car statement) 'var) (next (M_declare statement state)))
-      ((eq? (car statement) 'function) (next (append_state (cadr statement) (create_method_closure (cddr statement) state) state))) ; TODO: add function closures
+      ((eq? (car statement) 'function) (next (append_state (cadr statement) (create_method_closure (cddr statement) state) state)))
       ((eq? (car statement) 'static-function) (next (append_state (cadr statement) (create_method_closure (cddr statement) state) state))) ; MaybeTemp: Treats main func as regular function
       (else (error "Invalid statement in class"))
       )))
@@ -315,23 +318,24 @@
                                                     (cons (box (unbox (car vals))) v2)))))
       )))
 
+; Gets the return value of a method call
 (define M_funcall_value
   (lambda (instance method actual state)
     (vprintf "M_funcall_value called with instance: ~s, method: ~s, actual paramters: ~s and state: ~s\n" instance method actual state)
     (cond
-      ((eq? instance 'super) '()) ;TODO: implement super
-      ((eq? instance 'this) 
-        (M_state (cadr (get_var method (get_var instance state)))
+      ; ((eq? instance 'super) '()) ;TODO: implement super
+      ((or (eq? instance 'this) (eq? instance 'super)) 
+        (M_state (cadr (get_var method (get_var 'this state)))
                  (bind actual 
-                    (car (get_var method (get_var instance state)))
-                    (add_nested_state (append_state 'this (get_var instance state) init_state)) state)
+                    (car (get_var method (get_var 'this state)))
+                    (add_nested_state (append_state 'this (get_var 'this state) init_state)) state)
                   d_return d_next d_break d_continue d_throw
                   ))
                             
       (else (M_state (cadr (get_var method (caddr (get_instance instance state))))
                      (bind actual
                            (car(get_var method (caddr (get_instance instance state))))
-                           (add_nested_state (append_state 'this (caddr (get_instance instance state)) init_state)) state) ; TODO, does not pass in global state atm
+                           (add_nested_state (append_state 'this (caddr (get_instance instance state)) init_state)) state)
                      d_return d_next d_break d_continue d_throw
                                           ))) ; TODO: implement M_state after making M_value tail recursive
       ))
@@ -628,6 +632,27 @@
       ((var? raw_instance) (get_var raw_instance state))
       (else (M_value raw_instance state)))))
 
+; Gets just the superclass of a class during class closure creation
+(define get_superclass
+  (lambda (statement)
+    (if (null? (car statement))
+      '()
+      (cadar statement))))
+
+; Gets the parent statement of a class during class closure creation
+(define get_parent_statement
+  (lambda (superclass global_state)
+    (if (null? superclass)
+      '()
+      (cadr (get_var superclass global_state)))))
+
+(define get_parent_superclass
+  (lambda (superclass global_state)
+    (if (null? superclass)
+      '()
+      (car (get_var superclass global_state)))))
+
+
 ;=====================================================================================================
 ;; Abstractions
 ;=====================================================================================================
@@ -690,15 +715,18 @@
 (trace M_try)
 (trace M_if)
 (trace M_while)
-(trace M_declare)
-(trace M_assign)
+; (trace M_declare)
+; (trace M_assign)
 (trace M_value)
 (trace M_funcall_value)
 (trace bind)
 (trace M_dot_value)
 (trace M_boolean)
 (trace M_return)
-(trace create_method_closure)
+; (trace create_method_closure)
 (trace execute_main)
-; (trace get_main)
+(trace get_main)
+; (trace get_superclass)
+; (trace get_parent_statement)
+; (trace get_parent_superclass)
 ; (trace get_var)
