@@ -320,11 +320,18 @@
     (vprintf "M_funcall_value called with instance: ~s, method: ~s, actual paramters: ~s and state: ~s\n" instance method actual state)
     (cond
       ((eq? instance 'super) '()) ;TODO: implement super
-      ((eq? instance 'this) '()) ;TODO: implement this
-      (else (M_state (cadr (get_var method (caddr (get_var instance state))))
+      ((eq? instance 'this) 
+        (M_state (cadr (get_var method (get_var instance state)))
+                 (bind actual 
+                    (car (get_var method (get_var instance state)))
+                    (add_nested_state (append_state 'this (get_var instance state) init_state)) state)
+                  d_return d_next d_break d_continue d_throw
+                  ))
+                            
+      (else (M_state (cadr (get_var method (caddr (get_instance instance state))))
                      (bind actual
-                           (car(get_var method (caddr (get_var instance state))))
-                           (add_nested_state (append_state 'this (caddr (get_var instance state)) init_state)) state) ; TODO, does not pass in global state atm
+                           (car(get_var method (caddr (get_instance instance state))))
+                           (add_nested_state (append_state 'this (caddr (get_instance instance state)) init_state)) state) ; TODO, does not pass in global state atm
                      d_return d_next d_break d_continue d_throw
                                           ))) ; TODO: implement M_state after making M_value tail recursive
       ))
@@ -342,8 +349,8 @@
     (vprintf "M_dot_value called with instance: ~s, value: ~s and state: ~s\n" instance value state)
     (cond
       ((eq? instance 'super) '()) ;TODO: implement super
-      ((eq? instance 'this) (get_var value (get_var instance state))) ;TODO: implement this
-      (else (get_var value (caddr (get_var instance state)))))))
+      ((eq? instance 'this) (get_var value (get_instance instance state)))
+      (else (get_var value (caddr (get_instance instance state)))))))
 
 ; evaluates a boolean expression  ==, !=, <, >, <=. >=
 (define M_boolean
@@ -612,6 +619,15 @@
   (lambda (classname state) 
     (cddr (get_var classname state))))
 
+; turn funcall / dot input into actual instance record
+(define get_instance
+  (lambda (raw_instance state)
+    (cond 
+      ((eq? raw_instance 'super) '())
+      ((eq? raw_instance 'this) (get_var 'this state))
+      ((var? raw_instance) (get_var raw_instance state))
+      (else (M_value raw_instance state)))))
+
 ;=====================================================================================================
 ;; Abstractions
 ;=====================================================================================================
@@ -674,7 +690,7 @@
 (trace M_try)
 (trace M_if)
 (trace M_while)
-; (trace M_declare)
+(trace M_declare)
 (trace M_assign)
 (trace M_value)
 (trace M_funcall_value)
@@ -684,5 +700,5 @@
 (trace M_return)
 (trace create_method_closure)
 (trace execute_main)
-(trace get_main)
-(trace get_var)
+; (trace get_main)
+; (trace get_var)

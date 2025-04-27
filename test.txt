@@ -1,9 +1,14 @@
 class A {
-  var x = 5;
-  var y = 10;
+  var x = 1;
 
+  function getX() {
+    return this.x; 
+  }
+}
+
+class B extends A {
+  
   static function main() {
-    var a = new A();
-    return a.x + a.y;
+    return new B().getX(); 
   }
 }
