@@ -95,7 +95,7 @@
                                     (lambda (parent_state) (M_class_closure statement '() parent_state global_state next))))
       ((null? statement) (next state)) ; No more statements: return state 
       ((list? (car statement)) (M_class_closure (car statement) superclass state global_state (lambda (v) (M_class_closure (cdr statement) superclass v global_state next)))) ;Go thru list
-      ((eq? (car statement) 'var) (next (M_declare statement state)))
+      ((eq? (car statement) 'var) (next (M_declare_field statement state)))
       ((eq? (car statement) 'function) (next (append_state (cadr statement) (create_method_closure (cddr statement) state) state)))
       ((eq? (car statement) 'static-function) (next (append_state (cadr statement) (create_method_closure (cddr statement) state) state))) ; MaybeTemp: Treats main func as regular function
       (else (error "Invalid statement in class"))
@@ -233,6 +233,15 @@
     (vprintf "M_declare called with statement: ~s and state: ~s\n" statement state)
     (cond
       ((var_exists? (varname statement) state) (error ("Variable already exists")))
+      ((has_value? statement) (var_dec_assn 
+                                (varname statement) 
+                                (M_value (varvalue statement) state) state))
+      (else (var_dec (varname statement) state)))))
+
+; declare a field when creating class closure. Allows duplicates for inheritance
+(define M_declare_field
+  (lambda (statement state)
+    (cond
       ((has_value? statement) (var_dec_assn 
                                 (varname statement) 
                                 (M_value (varvalue statement) state) state))
