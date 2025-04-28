@@ -90,9 +90,15 @@
   (lambda (statement superclass state global_state next)
     (vprintf "M_class_closure called with statement: ~s, state: ~s\n" statement state)
     (cond
-      ((not (null? superclass)) (M_class_closure (get_parent_statement superclass global_state) 
-                                  (get_parent_superclass superclass global_state) state global_state
-                                    (lambda (parent_state) (M_class_closure statement '() parent_state global_state next))))
+      ;; Process child's statements first, then parent's
+      ((not (null? superclass))
+       (M_class_closure statement '() state global_state
+         (lambda (child_state)
+           (M_class_closure (get_parent_statement superclass global_state)
+                            (get_parent_superclass superclass global_state)
+                            child_state 
+                            global_state
+                            next))))
       ((null? statement) (next state)) ; No more statements: return state 
       ((list? (car statement)) (M_class_closure (car statement) superclass state global_state (lambda (v) (M_class_closure (cdr statement) superclass v global_state next)))) ;Go thru list
       ((eq? (car statement) 'var) (next (M_declare_field statement state)))
@@ -738,4 +744,4 @@
 ; (trace get_superclass)
 ; (trace get_parent_statement)
 ; (trace get_parent_superclass)
-; (trace get_var)
+(trace get_var)
