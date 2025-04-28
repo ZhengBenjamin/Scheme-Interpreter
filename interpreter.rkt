@@ -35,7 +35,7 @@
 ; file: Full program to be interpreted, classname: Name of the class that contains the main method
 (define interpret
   (lambda (file classname)
-    (M_start (parser file) (string->symbol classname) init_state d_next)))
+    (M_start (parser file) (string->symbol classname) init_state #f d_next)))
 
 (define formater
   (lambda (input)
@@ -53,16 +53,14 @@
 ; M_start is the entry point for the interpreter. It creates all of the necessary closures, global 
 ; state, and calls M_state to start the interpreter after it creates final class.
 (define M_start
-  (lambda (statement classname state next)
+  (lambda (statement classname state ctType next)
     (vprintf "M_start called with statement: ~s, state: ~s\n" statement state)
     (cond
-      ((null? statement) (execute_main classname state)) ; Done parsing: execute main
+      ((null? statement) (execute_main classname state ctType)) ; Done parsing: execute main
       ((list? (function statement)) (M_start
-                                     (function statement) classname state (lambda (v)
-                                                                         (M_start (stmt_list statement) classname v next ))))
+                                     (function statement) classname state ctType (lambda (v)
+                                                                         (M_start (stmt_list statement) classname v ctType next ))))
       ((eq? (function statement) 'class) (next (M_class (stmt_list statement) state)))
-      ; ((null? statement) (M_state (get_main (car (cdddar statement)) d_return d_next) ;TODO add function to get body of main method
-      ;                                   (add_nested_state (M_class (cdar statement) state)) d_return d_next d_break d_continue d_throw))
       (else (error "No main function found")))))
 
 ; Processes class definitions, returns state with class and class closure
@@ -90,15 +88,14 @@
   (lambda (statement superclass state global_state next)
     (vprintf "M_class_closure called with statement: ~s, state: ~s\n" statement state)
     (cond
-      ;; Process child's statements first, then parent's
+      ;; Process parent's statements first, then child's
       ((not (null? superclass))
-       (M_class_closure statement '() state global_state
-         (lambda (child_state)
-           (M_class_closure (get_parent_statement superclass global_state)
-                            (get_parent_superclass superclass global_state)
-                            child_state 
-                            global_state
-                            next))))
+       (M_class_closure (get_parent_statement superclass global_state)
+                        (get_parent_superclass superclass global_state)
+                        state
+                        global_state
+                        (lambda (parent_state)
+                          (M_class_closure statement '() parent_state global_state next))))
       ((null? statement) (next state)) ; No more statements: return state 
       ((list? (car statement)) (M_class_closure (car statement) superclass state global_state (lambda (v) (M_class_closure (cdr statement) superclass v global_state next)))) ;Go thru list
       ((eq? (car statement) 'var) (next (M_declare_field statement state)))
@@ -113,34 +110,31 @@
     (list
      (car statement) ; Formal params
      (cadr statement) ; Body
-     )
-    ))
+     '#f            ; compile time type placeholder
+    )))
+
+(define get_function_cttype
+  (lambda (closure)
+    (caddr closure)))
 
 (define M_state
-  (lambda (statement state return next break continue throw)
+  (lambda (statement state ctType return next break continue throw)
     (vprintf "M_state called, statement: ~s, state: ~s, next: ~s, break: ~s, continue: ~s, throw: ~s\n" statement state next break continue throw)
     (cond
       ((null? statement) (next state))
-      
-      ; ((list? (function statement))
-      ;   (M_state (function statement) state
-      ;     (lambda (v1)
-      ;       (M_state (stmt_list statement) v1 return next break continue throw))
-      ;       next break continue throw))
       ((list? (function statement)) (M_state
-                                     (function statement) state return (lambda (v)
-                                                                         (M_state (stmt_list statement) v return next break continue throw))
+                                     (function statement) state ctType return (lambda (v)
+                                                                         (M_state (stmt_list statement) v ctType return next break continue throw))
                                      break continue throw))
-      
       ((eq? (function statement) 'begin)
        (M_state (stmt_list statement) 
                 (add_nested_state state) 
+                ctType
                 return
                 (lambda (v) (next (remove_nested_state v))) 
                 (lambda (v) (break (remove_nested_state v))) 
                 (lambda (v) (continue (remove_nested_state v)))
                 throw))
-      
       ((eq? (function statement) 'var) (next (M_declare
                                               statement
                                               state)))
@@ -150,60 +144,70 @@
       ((eq? (function statement) 'while) (M_while 
                                           (condition statement) 
                                           (body statement) 
-                                          state return next break continue throw))
-      ((eq? (function statement) 'if) (M_if statement state return next break continue throw))
+                                          state ctType return next break continue throw))
+      ((eq? (function statement) 'if) (M_if statement state ctType return next break continue throw))
       ((eq? (function statement) 'return) (return (M_return
                                                    (return_val statement)
-                                                   state)))
+                                                   state ctType)))
       ((eq? (function statement) 'break) (break state))
       ((eq? (function statement) 'continue) (continue state))
       ((eq? (function statement) 'throw) (throw state (value statement)))
       ((eq? (function statement) 'try) (M_try (stmt_list statement) 
                                               (add_nested_state state) 
+                                              ctType
                                               return 
                                               (lambda (v) (next (remove_nested_state v))) 
                                               (lambda (v) (break (remove_nested_state v))) 
                                               (lambda (v) (continue (remove_nested_state v))) 
                                               throw))
-      ((eq? (function statement) 'funcall)  (next (M_funcall_state (cadadr statement) (car (cddadr statement)) (cddr statement) state)))
+      ((eq? (function statement) 'funcall)  (next (M_funcall_state (cadadr statement) (car (cddadr statement)) (cddr statement) state ctType)))
       (else (error (format "Invalid statement: ~s" statement))))))
 
 ; Called when return value of funcall is not needed, returns original state, should still be effected because of boxes
 (define M_funcall_state
-  (lambda (instance method actual state)
+  (lambda (instance method actual state ctType)
     (vprintf "M_funcall_state called with instance: ~s, method: ~s, actual paramters: ~s and state: ~s\n" instance method actual state)
     (cond
-      ((eq? instance 'super) '()) ;TODO: implement super
-      ((eq? instance 'this) '()) ;TODO: implement this
+      ((eq? instance 'super)
+       (let ((superInst (get_super_instance state)))
+         (M_state (cadr (get_var method superInst))
+                  (bind actual
+                        (car (get_var method superInst))
+                        (add_nested_state (append_state 'this superInst init_state)) state)
+                  ctType
+                  d_return d_next d_break d_continue d_throw)
+         state))
+      ((eq? instance 'this) '()) 
       (else (M_state (cadr (get_var method (caddr (get_var instance state))))
                      (bind actual
                            (car(get_var method (caddr (get_var instance state))))
                            (add_nested_state (append_state 'this (caddr (get_var instance state)) init_state)) state) ; TODO, does not pass in global state atm
+                     ctType
                      d_return d_next d_break d_continue d_throw
-                                          ))) ; TODO: implement M_state after making M_value tail recursive
+                                          )))
     state
     ))
 
 (define M_try
-  (lambda (statement state return next break continue throw)
+  (lambda (statement state ctType return next break continue throw)
     (vprintf "M_try called with try_statement: ~s, state: ~s\n" statement state)
-    (vprintf "HHHHHHEEEEERRERERE cadr of statement: ~s\n" (cadr statement))
-    (M_state (tryblock statement) state return         
+    (M_state (tryblock statement) state ctType return         
              (if (not (null? (cadr statement)))
                   (if (not (null? (caddr statement)))
-                      (lambda (v) (M_state (finallyblock statement) v return next break continue throw))
+                      (lambda (v) (M_state (finallyblock statement) v ctType return next break continue throw))
                       next)
-                  (lambda (v) (M_state (earlyfinallyblock statement) v return next break continue throw)))
+                  (lambda (v) (M_state (earlyfinallyblock statement) v ctType return next break continue throw)))
               break continue
               (if (not (null? (cadr statement)))
                   (lambda (v1 v2) (M_state (catchblock statement) 
                                            (add_catch_state v1 (car (cadadr statement)) (car v2))
+                                           ctType
                                            return
                                            (if (not (null? (caddr statement)))
-                                               (lambda (v) (M_state (finallyblock statement) v return next break continue throw))
+                                               (lambda (v) (M_state (finallyblock statement) v ctType return next break continue throw))
                                                next)
                                            break continue throw))
-                  (lambda (v) (M_state (earlyfinallyblock statement) v return next break continue throw)))
+                  (lambda (v) (M_state (earlyfinallyblock statement) v ctType return next break continue throw)))
               )))
 
 (define add_catch_state
@@ -213,23 +217,23 @@
   
 ; if statement. If condition is true,
 (define M_if
-  (lambda (statement state return next break continue throw)
+  (lambda (statement state ctType return next break continue throw)
     (vprintf "M_if called with statement: ~s, state: ~s\n" statement state)
-    (if (M_boolean (condition statement) state)
-        (M_state (body1 statement) state return next break continue throw)
+    (if (M_boolean (condition statement) state ctType)
+        (M_state (body1 statement) state ctType return next break continue throw)
         (if (> 4 (length statement))
             (next state)
-            (M_state (body2 statement) state return next break continue throw)))))
+            (M_state (body2 statement) state ctType return next break continue throw)))))
 
 (define M_while
-  (lambda (while_statement while_body state return next break continue throw)
+  (lambda (while_statement while_body state ctType return next break continue throw)
     (vprintf "M_while called with while_statement: ~s, while_body: ~s, state: ~s\n" 
               while_statement while_body state)
-    (if (M_boolean while_statement state)
-        (M_state while_body state return 
-                 (lambda (v) (M_while while_statement while_body v return next break continue throw)) 
+    (if (M_boolean while_statement state ctType)
+        (M_state while_body state ctType return 
+                 (lambda (v) (M_while while_statement while_body v ctType return next break continue throw)) 
                  (lambda (v) (next v))
-                 (lambda (v) (M_while while_statement while_body v return next break continue throw))
+                 (lambda (v) (M_while while_statement while_body v ctType return next break continue throw))
                  throw)
         (next state))))
 
@@ -241,7 +245,7 @@
       ((var_exists? (varname statement) state) (error ("Variable already exists")))
       ((has_value? statement) (var_dec_assn 
                                 (varname statement) 
-                                (M_value (varvalue statement) state) state))
+                                (M_value (varvalue statement) state #f) state))
       (else (var_dec (varname statement) state)))))
 
 ; declare a field when creating class closure. Allows duplicates for inheritance
@@ -250,7 +254,7 @@
     (cond
       ((has_value? statement) (var_dec_assn 
                                 (varname statement) 
-                                (M_value (varvalue statement) state) state))
+                                (M_value (varvalue statement) state #f) state))
       (else (var_dec (varname statement) state)))))
 
 ; assigns a value to a variable
@@ -258,14 +262,12 @@
   (lambda (statement state)
     (vprintf "M_assign called with statement: ~s and state: ~s\n" statement state)
     (if (var_exists? (varname statement) state)
-      (var_assn (varname statement) (M_value (varvalue statement) state) state)
+      (var_assn (varname statement) (M_value (varvalue statement) state #f) state)
       (error (format "Variable not declared: ~s" (varname statement))))))
-
-
 
 ; evaluates a mathematical expression
 (define M_value
-  (lambda (expression state)
+  (lambda (expression state ctType)
     (vprintf "M_value called with expression: ~s and state: ~s\n" expression state)
     (cond
       ((eq? 'true expression) #t)
@@ -274,32 +276,32 @@
       ((number? expression) expression)
       ((var? expression) (get_var expression state))
       ((eq? '|| (op expression)) (or 
-                                  (M_boolean (x expression) state) 
-                                  (M_boolean (y expression) state)))
+                                  (M_boolean (x expression) state ctType) 
+                                  (M_boolean (y expression) state ctType)))
       ((eq? '&& (op expression)) (and 
-                                  (M_boolean (x expression) state) 
-                                  (M_boolean (y expression) state)))
-      ((eq? '! (op expression)) (not (M_boolean (x expression) state)))
-      ((eq? '== (op expression)) (eq? (M_value (x expression) state) (M_value (y expression) state)))
+                                  (M_boolean (x expression) state ctType) 
+                                  (M_boolean (y expression) state ctType)))
+      ((eq? '! (op expression)) (not (M_boolean (x expression) state ctType)))
+      ((eq? '== (op expression)) (eq? (M_value (x expression) state ctType) (M_value (y expression) state ctType)))
       ((eq? '!= (op expression)) (not (eq? 
-                                        (M_value (x expression) state) 
-                                        (M_value (y expression) state))))
-      ((eq? '> (op expression)) (> (M_value (x expression) state) (M_value (y expression) state)))
-      ((eq? '< (op expression)) (< (M_value (x expression) state) (M_value (y expression) state)))
-      ((eq? '>= (op expression)) (>= (M_value (x expression) state) (M_value (y expression) state)))
-      ((eq? '<= (op expression)) (<= (M_value (x expression) state) (M_value (y expression) state)))
-      ((eq? '+ (op expression)) (+ (M_value (x expression) state) (M_value (y expression) state)))
+                                        (M_value (x expression) state ctType) 
+                                        (M_value (y expression) state ctType))))
+      ((eq? '> (op expression)) (> (M_value (x expression) state ctType) (M_value (y expression) state ctType)))
+      ((eq? '< (op expression)) (< (M_value (x expression) state ctType) (M_value (y expression) state ctType)))
+      ((eq? '>= (op expression)) (>= (M_value (x expression) state ctType) (M_value (y expression) state ctType)))
+      ((eq? '<= (op expression)) (<= (M_value (x expression) state ctType) (M_value (y expression) state ctType)))
+      ((eq? '+ (op expression)) (+ (M_value (x expression) state ctType) (M_value (y expression) state ctType)))
       ((eq? '- (op expression)) (subtract expression state))
-      ((eq? '* (op expression)) (* (M_value (x expression) state) (M_value (y expression) state)))
+      ((eq? '* (op expression)) (* (M_value (x expression) state ctType) (M_value (y expression) state ctType)))
       ((eq? '/ (op expression)) (quotient 
-                                  (M_value (x expression) state) 
-                                  (M_value (y expression) state)))
+                                  (M_value (x expression) state ctType) 
+                                  (M_value (y expression) state ctType)))
       ((eq? '% (op expression)) (remainder 
-                                  (M_value (x expression) state) 
-                                  (M_value (y expression) state)))
-      ((eq? 'new (op expression)) (create_class_instance (get_var (x expression) state))) ; TODO: does not actually create new instance because of boxes
+                                  (M_value (x expression) state ctType) 
+                                  (M_value (y expression) state ctType)))
+      ((eq? 'new (op expression)) (create_class_instance (get_var (x expression) state))) 
       ((eq? 'dot (op expression)) (M_dot_value (x expression) (y expression) state))
-      ((eq? 'funcall (op expression)) (M_funcall_value (cadadr expression) (car (cddadr expression)) (cddr expression) state))
+      ((eq? 'funcall (op expression)) (M_funcall_value (cadadr expression) (car (cddadr expression)) (cddr expression) state ctType))
       (else (error "Invalid expression")))))
 
 (define create_class_instance
@@ -324,56 +326,69 @@
                                         (car vals) 
                                         (lambda (v3 v4) 
                                           (return (cons (v3 v1)) 
-                                                  (cons (v4 v2))))
-                                        ))))
+                                                  (cons (v4 v2))))))
+                                     ))
       (else (create_class_instance_helper (cdr vars)
                                           (cdr vals)
                                           (lambda (v1 v2) 
                                             (return (cons (car vars) v1) 
-                                                    (cons (box (unbox (car vals))) v2)))))
-      )))
+                                                    (cons (box (unbox (car vals))) v2))))))))
 
 ; Gets the return value of a method call
 (define M_funcall_value
-  (lambda (instance method actual state)
+  (lambda (instance method actual state ctType)
     (vprintf "M_funcall_value called with instance: ~s, method: ~s, actual paramters: ~s and state: ~s\n" instance method actual state)
     (cond
-      ; ((eq? instance 'super) '()) ;TODO: implement super
-      ((or (eq? instance 'this) (eq? instance 'super)) 
+      ((eq? instance 'super)
+       (let ((superInst (get_super_instance state)))
+         (M_state (cadr (get_var method superInst))
+                  (bind actual
+                        (car (get_var method superInst))
+                        (add_nested_state (append_state 'this superInst init_state)) state)
+                  ctType
+                  d_return d_next d_break d_continue d_throw)))
+      ((eq? instance 'this) 
         (M_state (cadr (get_var method (get_var 'this state)))
                  (bind actual 
                     (car (get_var method (get_var 'this state)))
                     (add_nested_state (append_state 'this (get_var 'this state) init_state)) state)
+                  ctType
                   d_return d_next d_break d_continue d_throw
                   ))
-                            
       (else (M_state (cadr (get_var method (caddr (get_instance instance state))))
                      (bind actual
                            (car(get_var method (caddr (get_instance instance state))))
                            (add_nested_state (append_state 'this (caddr (get_instance instance state)) init_state)) state)
+                     ctType
                      d_return d_next d_break d_continue d_throw
-                                          ))) ; TODO: implement M_state after making M_value tail recursive
-      ))
-
+                                          )))))
 
 (define bind
   (lambda (actual formal state real_state)
     (vprintf "bind called with actual parameters: ~s, formal parameters: ~s, and state: ~s\n" actual formal state)
     (cond
-      ((not (null? actual)) (bind (cdr actual) (cdr formal) (append_state (car formal) (M_value (car actual) real_state) state) real_state))
+      ((not (null? actual)) (bind (cdr actual) (cdr formal) (append_state (car formal) (M_value (car actual) real_state #f) state) real_state))
       (else state))))
+
+(define get_super_instance
+  (lambda (state)
+    (let* ((thisInstance (get_var 'this state))
+           (superclassName (car thisInstance))
+           (superclassDef (get_var superclassName state)))
+      (caddr superclassDef))))
 
 (define M_dot_value
   (lambda (instance value state)
     (vprintf "M_dot_value called with instance: ~s, value: ~s and state: ~s\n" instance value state)
     (cond
-      ((eq? instance 'super) '()) ;TODO: implement super
+      ((eq? instance 'super)
+       (get_var value (get_super_instance state)))
       ((eq? instance 'this) (get_var value (get_instance instance state)))
       (else (get_var value (caddr (get_instance instance state)))))))
 
 ; evaluates a boolean expression  ==, !=, <, >, <=. >=
 (define M_boolean
-  (lambda (expression state)
+  (lambda (expression state ctType)
     (vprintf "M_boolean called with expression: ~s and state: ~s\n" expression state)
     (cond
       ((boolean? expression) expression)
@@ -381,43 +396,43 @@
       ((eq? 'true expression) #t)
       ((eq? 'false expression) #f)
       ((eq? '== (op expression)) (eq? 
-                                  (M_value (x expression) state) 
-                                  (M_value (y expression) state)))
+                                  (M_value (x expression) state ctType) 
+                                  (M_value (y expression) state ctType)))
       ((eq? '!= (op expression)) (not (eq? 
-                                        (M_value (x expression) state) 
-                                        (M_value (y expression) state))))
+                                        (M_value (x expression) state ctType) 
+                                        (M_value (y expression) state ctType))))
       ((eq? '> (op expression)) (> 
-                                  (M_value (x expression) state) 
-                                  (M_value (y expression) state)))
+                                  (M_value (x expression) state ctType) 
+                                  (M_value (y expression) state ctType)))
       ((eq? '< (op expression)) (< 
-                                  (M_value (x expression) state) 
-                                  (M_value (y expression) state)))
+                                  (M_value (x expression) state ctType) 
+                                  (M_value (y expression) state ctType)))
       ((eq? '>= (op expression)) (>= 
-                                  (M_value (x expression) state) 
-                                  (M_value (y expression) state)))
+                                  (M_value (x expression) state ctType) 
+                                  (M_value (y expression) state ctType)))
       ((eq? '<= (op expression)) (<= 
-                                  (M_value (x expression) state) 
-                                  (M_value (y expression) state)))
+                                  (M_value (x expression) state ctType) 
+                                  (M_value (y expression) state ctType)))
       ((eq? '&& (op expression)) (and 
-                                  (M_boolean (x expression) state) 
-                                  (M_boolean (y expression) state)))
+                                  (M_boolean (x expression) state ctType) 
+                                  (M_boolean (y expression) state ctType)))
       ((eq? '|| (op expression)) (or 
-                                  (M_boolean (x expression) state) 
-                                  (M_boolean (y expression) state)))
-      ((eq? '! (op expression)) (not (M_boolean (x expression) state)))
+                                  (M_boolean (x expression) state ctType) 
+                                  (M_boolean (y expression) state ctType)))
+      ((eq? '! (op expression)) (not (M_boolean (x expression) state ctType)))
       (else (error "invalid boolean expression"))
       )))
 
 ; return statement
 (define M_return
-  (lambda (statement state)
+  (lambda (statement state ctType)
     (vprintf "M_return called with statement: ~s, state: ~s\n" statement state)
-    (formater (M_value statement state))))
+    (formater (M_value statement state ctType))))
 
 ; Executes the main function when whole program is done parsing
 (define execute_main
-  (lambda (classname state)
-    (M_state (get_main classname state) state d_return d_next d_break d_continue d_throw)
+  (lambda (classname state ctType)
+    (M_state (get_main classname state) state ctType d_return d_next d_break d_continue d_throw)
     ))
 
 ;=====================================================================================================
@@ -440,11 +455,10 @@
     (vprintf "var_assn called with var: ~s, val: ~s and state: ~s\n" var val state)
     (if (var_exists? var state)
         (cond
-          ((list? var) (add_binding (caddr var) (M_value val state) (get_var (cadr var) state)))
-          (else (add_binding var (M_value val state) state)))
+          ((list? var) (add_binding (caddr var) (M_value val state #f) (get_var (cadr var) state)))
+          (else (add_binding var (M_value val state #f) state)))
         
       (error (format "Variable not declared: ~s" var)))))
-
 
 ;=====================================================================================================
 ;; State Logic
@@ -553,8 +567,8 @@
   (lambda (expression state)
     (vprintf "subtract called with expression: ~s and state: ~s\n" expression state)
     (cond 
-      ((null? (unary expression)) (- (M_value (x expression) state)))
-      (else (- (M_value (x expression) state) (M_value (y expression) state))))))
+      ((null? (unary expression)) (- (M_value (x expression) state #f)))
+      (else (- (M_value (x expression) state #f) (M_value (y expression) state #f))))))
 
 ; Checks to see if a atom could be variable
 (define var?
@@ -587,7 +601,6 @@
       ((null? (vars state)) #f)
       ((list? (first_var state)) (or (var_exists? var (top_state state)) 
                                       (var_exists? var (remain_state state))))
-      ; (vprintf "var_exists? sanity check with var: ~s and state ~s\n" var state)
       ((list? var) (if (equal? (cadr var) (first_var state)) ; checks to see if using dot
                        #t
                        (var_exists? var (remain_state state))))
@@ -645,7 +658,7 @@
       ((eq? raw_instance 'super) '())
       ((eq? raw_instance 'this) (get_var 'this state))
       ((var? raw_instance) (get_var raw_instance state))
-      (else (M_value raw_instance state)))))
+      (else (M_value raw_instance state #f)))))
 
 ; Gets just the superclass of a class during class closure creation
 (define get_superclass
